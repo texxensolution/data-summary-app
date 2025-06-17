@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Summary Analytics</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f9fafb;
+            color: #1f2937;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 0;
+        }
+
+        .header h1 {
+            font-size: 1.875rem;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .header-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #6b7280;
+            font-size: 0.875rem;
+        }
+
+        /* Navigation */
+        .nav {
+            padding: 1rem 0;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .nav-tab {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+            background: none;
+            color: #6b7280;
+        }
+
+        .nav-tab:hover {
+            color: #1f2937;
+            background-color: #f3f4f6;
+        }
+
+        .nav-tab.active {
+            background-color: #dbeafe;
+            color: #1d4ed8;
+            border-color: #bfdbfe;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* Upload Section */
+        .upload-area {
+            text-align: center;
+        }
+
+        .upload-dropzone {
+            border: 2px dashed #d1d5db;
+            border-radius: 0.5rem;
+            padding: 2rem;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .upload-dropzone:hover {
+            border-color: #9ca3af;
+        }
+
+        .upload-dropzone.dragover {
+            border-color: #3b82f6;
+            background-color: #f0f9ff;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-list {
+            margin-top: 1.5rem;
+            text-align: left;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background-color: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .file-item-info {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .file-item-stats {
+            font-size: 0.875rem;
+            color: #059669;
+        }
+
+        /* Configuration Section */
+        .config-file {
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+            text-transform: capitalize;
+        }
+
+        .form-select {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #d1d5db;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            transition: border-color 0.2s;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Summary Cards */
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .summary-actions {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-size: 0.875rem;
+        }
+
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+
+        .btn-secondary {
+            background-color: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #4b5563;
+        }
+
+        .btn-purple {
+            background-color: #7c3aed;
+            color: white;
+        }
+
+        .btn-purple:hover {
+            background-color: #6d28d9;
+        }
+
+        .btn-green {
+            background-color: #10b981;
+            color: white;
+        }
+
+        .btn-green:hover {
+            background-color: #059669;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .summary-card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            border-left: 4px solid;
+        }
+
+        .summary-card-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .summary-card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .summary-card-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .icon-btn {
+            padding: 0.25rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            border-radius: 0.25rem;
+            color: #6b7280;
+            transition: all 0.2s;
+        }
+
+        .icon-btn:hover {
+            color: #374151;
+            background-color: #f3f4f6;
+        }
+
+        .icon-btn.active {
+            background-color: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .summary-total {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background-color: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .summary-total-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .summary-total-value {
+            font-size: 1.125rem;
+            font-weight: bold;
+        }
+
+        .summary-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .summary-item {
+            border-bottom: 1px solid #f3f4f6;
+            padding-bottom: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .summary-item-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.25rem 0;
+        }
+
+        .summary-item-label {
+            font-size: 0.875rem;
+            color: #4b5563;
+            flex: 1;
+            margin-right: 0.5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .summary-item-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .summary-item-count {
+            font-weight: 600;
+            color: #1f2937;
+            background-color: #f3f4f6;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.75rem;
+        }
+
+        .summary-item-percent {
+            font-size: 0.75rem;
+            color: #6b7280;
+            min-width: 2.5rem;
+            text-align: right;
+        }
+
+        .breakdown-items {
+            margin-left: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .breakdown-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .breakdown-item-label {
+            color: #6b7280;
+            flex: 1;
+            margin-right: 0.5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .breakdown-item-count {
+            color: #4b5563;
+            background-color: #f9fafb;
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+        }
+
+        .breakdown-item-percent {
+            color: #9ca3af;
+            min-width: 2rem;
+            text-align: right;
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            background-color: #f9fafb;
+            padding: 0.75rem 1.5rem;
+            text-align: left;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        td {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #f3f4f6;
+            font-size: 0.875rem;
+        }
+
+        tr:hover {
+            background-color: #f9fafb;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 9999px;
+            background-color: #dcfce7;
+            color: #166534;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #3b82f6;
+            margin-top: 1rem;
+        }
+
+        .spinner {
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 2px solid #e5e7eb;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Utility Classes */
+        .hidden {
+            display: none !important;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .mb-4 {
+            margin-bottom: 1rem;
+        }
+
+        .mb-6 {
+            margin-bottom: 1.5rem;
+        }
+
+        .text-lg {
+            font-size: 1.125rem;
+        }
+
+        .text-xl {
+            font-size: 1.25rem;
+        }
+
+        .text-2xl {
+            font-size: 1.5rem;
+        }
+
+        .font-semibold {
+            font-weight: 600;
+        }
+
+        .font-bold {
+            font-weight: 700;
+        }
+
+        .text-gray-600 {
+            color: #4b5563;
+        }
+
+        .text-gray-900 {
+            color: #1f2937;
+        }
+
+        /* SVG Icons */
+        .icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            fill: currentColor;
+        }
+
+        .icon-lg {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+
+        .icon-xl {
+            width: 4rem;
+            height: 4rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .config-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .summary-header {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: stretch;
+            }
+            
+            .summary-actions {
+                justify-content: center;
+            }
+            
+            .nav-tabs {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="container">
+            <div class="header-content">
+                <h1>Data Summary Analytics</h1>
+                <div class="header-meta">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="16" y1="2" x2="16" y2="6"/>
+                        <line x1="8" y1="2" x2="8" y2="6"/>
+                        <line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                    <span id="current-date">June 17, 2025 8AM</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="container">
+        <div class="nav">
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="upload">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7,10 12,15 17,10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Upload Files
+                </button>
+                <button class="nav-tab" data-tab="configure">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="m12 1 0 6m0 6 0 6m11-7-6 0m-6 0-6 0"/>
+                    </svg>
+                    Configure Columns
+                </button>
+                <button class="nav-tab" data-tab="summary">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="20" x2="12" y2="10"/>
+                        <line x1="18" y1="20" x2="18" y2="4"/>
+                        <line x1="6" y1="20" x2="6" y2="16"/>
+                    </svg>
+                    Summary Reports
+                </button>
+            </div>
+        </div>
+
+        <!-- Upload Tab -->
+        <div id="upload-tab" class="tab-content">
+            <div class="card">
+                <div class="upload-area">
+                    <svg class="icon-xl text-gray-600 mb-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; color: #9ca3af;">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14,2 14,8 20,8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10,9 9,9 8,9"/>
+                    </svg>
+                    <h2 class="text-2xl font-semibold text-gray-900 mb-4">Upload Your Data Files</h2>
+                    <p class="text-gray-600 mb-6">
+                        Upload CSV files (BDO8AM.csv, BPI8AM.csv, DL8AM.csv, etc.) to analyze and summarize your data
+                    </p>
+                    
+                    <div class="upload-dropzone" id="dropzone">
+                        <input type="file" id="file-input" class="file-input" multiple accept=".csv">
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                            <svg class="icon-xl text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #9ca3af;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7,10 12,15 17,10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            <span class="text-lg font-semibold text-gray-900">
+                                Choose CSV files or drag them here
+                            </span>
+                            <span class="text-gray-600">
+                                Multiple files supported
+                            </span>
+                        </div>
+                    </div>
+
+                    <div id="loading" class="loading hidden">
+                        <div class="spinner"></div>
+                        <span>Processing files...</span>
+                    </div>
+
+                    <div id="file-list" class="file-list hidden">
+                        <h3 class="font-semibold text-gray-900 mb-4">Uploaded Files:</h3>
+                        <div id="file-items"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configure Tab -->
+        <div id="configure-tab" class="tab-content hidden">
+            <div class="card">
+                <h2 class="text-2xl font-semibold text-gray-900 mb-4">Configure Column Mappings</h2>
+                <p class="text-gray-600 mb-6">
+                    Map the columns from your files to standard categories for consistent analysis
+                </p>
+                <div id="config-files"></div>
+            </div>
+        </div>
+
+        <!-- Summary Tab -->
+        <div id="summary-tab" class="tab-content hidden">
+            <div class="card">
+                <div class="summary-header">
+                    <h2 class="text-2xl font-semibold text-gray-900">Summary Overview</h2>
+                    <div class="summary-actions">
+                        <button id="export-png" class="btn btn-purple">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21,15 16,10 5,21"/>
+                            </svg>
+                            Export as PNG
+                        </button>
+                        <button id="export-csv" class="btn btn-primary">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7,10 12,15 17,10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Export CSV
+                        </button>
+                        <div id="total-records" class="text-lg font-bold" style="color: #3b82f6; display: flex; align-items: center; gap: 0.5rem;">
+                            <svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
+                            </svg>
+                            <span>Total Records: 0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="summary-content" class="summary-export-area">
+                    <div class="summary-grid" id="summary-cards"></div>
+                    
+                    <!-- Data Table -->
+                    <div class="card">
+                        <div class="summary-header">
+                            <h3 class="text-lg font-semibold text-gray-900">Consolidated Data Preview</h3>
+                            <button id="export-table" class="btn btn-green">
+                                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7,10 12,15 17,10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                </svg>
+                                Export Table
+                            </button>
+                        </div>
+                        <div class="table-container">
+                            <table id="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>File</th>
+                                        <th>Bank</th>
+                                        <th>Area</th>
+                                        <th>Cluster</th>
+                                        <th>Status</th>
+                                        <th>Field Rider</th>
+                                        <th>CH Code</th>
+                                        <th>Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="table-footer" class="text-center text-gray-600 hidden" style="margin-top: 1rem; font-size: 0.875rem;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let files = [];
+        let parsedData = [];
+        let columnMappings = {};
+        let activeTab = 'upload';
+        let consolidatedData = [];
+        let summaryStats = null;
+
+        // Standard column mappings
+        const standardColumns = {
+            bank: ['BANK NAME', 'BANK', 'bank_txt', 'BANK NAME REAL'],
+            area: ['AREA', 'FINAL AREA', 'final_area_txt'],
+            cluster: ['CLUSTER', 'CH CODE', 'CH NAME'],
+            status: ['account_status', 'STATUS', 'reported_status', 'OPEN CI STATUS'],
+            fieldRider: ['ASSIGNED FS', 'FIELDMAN', 'Creator'],
+            chCode: ['CH CODE', 'REF CODE'],
+            date: ['Creation Date', 'Result_Date', 'result_date', 'VISITED DATE', 'Modified Date'],
+            subStatus: ['sub_status', 'SUBSTATUS', 'PROGRESS']
+        };
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeEventListeners();
+            updateCurrentDate();
+        });
+
+        function initializeEventListeners() {
+            // Tab navigation
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    const tabName = e.currentTarget.getAttribute('data-tab');
+                    switchTab(tabName);
+                });
+            });
+
+            // File upload
+            const fileInput = document.getElementById('file-input');
+            const dropzone = document.getElementById('dropzone');
+
+            dropzone.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileUpload);
+
+            // Drag and drop
+            dropzone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropzone.classList.add('dragover');
+            });
+
+            dropzone.addEventListener('dragleave', () => {
+                dropzone.classList.remove('dragover');
+            });
+
+            dropzone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropzone.classList.remove('dragover');
+                const droppedFiles = Array.from(e.dataTransfer.files);
+                processFiles(droppedFiles);
+            });
+
+            // Export buttons
+            document.getElementById('export-png').addEventListener('click', exportToPNG);
+            document.getElementById('export-csv').addEventListener('click', exportConsolidatedData);
+            document.getElementById('export-table').addEventListener('click', exportConsolidatedData);
+        }
+
+        function updateCurrentDate() {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            }) + ' ' + now.toLocaleTimeString('en-US', { 
+                hour: 'numeric', 
+                hour12: true 
+            });
+            document.getElementById('current-date').textContent = dateStr;
+        }
+
+        function switchTab(tabName) {
+            // Update nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+
+            activeTab = tabName;
+        }
+
+        async function handleFileUpload(event) {
+            const uploadedFiles = Array.from(event.target.files);
+            await processFiles(uploadedFiles);
+        }
+
+        async function processFiles(uploadedFiles) {
+            document.getElementById('loading').classList.remove('hidden');
+            
+            try {
+                files = uploadedFiles;
+                parsedData = [];
+                
+                for (const file of uploadedFiles) {
+                    const text = await file.text();
+                    const parsed = Papa.parse(text, {
+                        header: true,
+                        dynamicTyping: true,
+                        skipEmptyLines: true,
+                        delimitersToGuess: [',', '\t', '|', ';']
+                    });
+                    
+                    // Clean headers by trimming whitespace
+                    const cleanedData = parsed.data.map(row => {
+                        const cleanRow = {};
+                        Object.keys(row).forEach(key => {
+                            const cleanKey = key.trim();
+                            cleanRow[cleanKey] = row[key];
+                        });
+                        return cleanRow;
+                    });
+                    
+                    parsedData.push({
+                        name: file.name,
+                        data: cleanedData,
+                        headers: Object.keys(cleanedData[0] || {}),
+                        rowCount: cleanedData.length
+                    });
+                }
+                
+                // Auto-detect column mappings
+                autoDetectColumnMappings();
+                
+                // Update UI
+                displayFileList();
+                updateConsolidatedData();
+                updateSummaryStats();
+                
+                // Switch to configure tab
+                switchTab('configure');
+                
+            } catch (error) {
+                console.error('Error parsing files:', error);
+                alert('Error processing files. Please try again.');
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        function autoDetectColumnMappings() {
+            columnMappings = {};
+            parsedData.forEach((file, fileIndex) => {
+                columnMappings[fileIndex] = {};
+                Object.keys(standardColumns).forEach(stdCol => {
+                    const matchedCol = file.headers.find(header => 
+                        standardColumns[stdCol].some(variant => 
+                            header.toUpperCase().includes(variant.toUpperCase())
+                        )
+                    );
+                    if (matchedCol) {
+                        columnMappings[fileIndex][stdCol] = matchedCol;
+                    }
+                });
+            });
+            updateConfigurationUI();
+        }
+
+        function displayFileList() {
+            const fileList = document.getElementById('file-list');
+            const fileItems = document.getElementById('file-items');
+            
+            if (parsedData.length === 0) {
+                fileList.classList.add('hidden');
+                return;
+            }
+            
+            fileList.classList.remove('hidden');
+            fileItems.innerHTML = '';
+            
+            parsedData.forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div class="file-item-info">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #059669;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14,2 14,8 20,8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                            <polyline points="10,9 9,9 8,9"/>
+                        </svg>
+                        <span class="font-semibold" style="color: #065f46;">${file.name}</span>
+                    </div>
+                    <div class="file-item-stats">
+                        ${file.rowCount} rows, ${file.headers.length} columns
+                    </div>
+                `;
+                fileItems.appendChild(fileItem);
+            });
+        }
+
+        function updateConfigurationUI() {
+            const configFiles = document.getElementById('config-files');
+            configFiles.innerHTML = '';
+            
+            parsedData.forEach((file, fileIndex) => {
+                const configFile = document.createElement('div');
+                configFile.className = 'config-file';
+                
+                const headerHTML = `
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14,2 14,8 20,8"/>
+                        </svg>
+                        ${file.name}
+                    </h3>
+                `;
+                
+                const gridHTML = `
+                    <div class="config-grid">
+                        ${Object.keys(standardColumns).map(columnType => `
+                            <div class="form-group">
+                                <label class="form-label">
+                                    ${columnType.replace(/([A-Z])/g, ' $1').trim()}
+                                </label>
+                                <select class="form-select" data-file-index="${fileIndex}" data-column-type="${columnType}">
+                                    <option value="">Select column...</option>
+                                    ${file.headers.map(header => `
+                                        <option value="${header}" ${columnMappings[fileIndex]?.[columnType] === header ? 'selected' : ''}>
+                                            ${header}
+                                        </option>
+                                    `).join('')}
+                                </select>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+                configFile.innerHTML = headerHTML + gridHTML;
+                configFiles.appendChild(configFile);
+            });
+            
+            // Add event listeners to selects
+            document.querySelectorAll('.form-select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    const fileIndex = parseInt(e.target.getAttribute('data-file-index'));
+                    const columnType = e.target.getAttribute('data-column-type');
+                    const selectedColumn = e.target.value;
+                    
+                    updateColumnMapping(fileIndex, columnType, selectedColumn);
+                });
+            });
+        }
+
+        function updateColumnMapping(fileIndex, columnType, selectedColumn) {
+            if (!columnMappings[fileIndex]) {
+                columnMappings[fileIndex] = {};
+            }
+            columnMappings[fileIndex][columnType] = selectedColumn;
+            
+            updateConsolidatedData();
+            updateSummaryStats();
+        }
+
+        function updateConsolidatedData() {
+            if (!parsedData.length) {
+                consolidatedData = [];
+                return;
+            }
+            
+            consolidatedData = [];
+            
+            parsedData.forEach((file, fileIndex) => {
+                const mapping = columnMappings[fileIndex] || {};
+                
+                file.data.forEach(row => {
+                    const consolidatedRow = {
+                        _fileName: file.name,
+                        _fileIndex: fileIndex,
+                        bank: row[mapping.bank] || 'Unknown',
+                        area: row[mapping.area] || 'Unknown',
+                        cluster: row[mapping.cluster] || 'Unknown',
+                        status: row[mapping.status] || 'Unknown',
+                        fieldRider: row[mapping.fieldRider] || 'Unknown',
+                        chCode: row[mapping.chCode] || 'Unknown',
+                        date: row[mapping.date] || 'Unknown',
+                        subStatus: row[mapping.subStatus] || 'Unknown',
+                        _originalRow: row
+                    };
+                    consolidatedData.push(consolidatedRow);
+                });
+            });
+        }
+
+        function updateSummaryStats() {
+            if (!consolidatedData.length) {
+                summaryStats = null;
+                return;
+            }
+
+            const byArea = {};
+            const byBank = {};
+            const byUser = {};
+            const byStatus = {};
+            const byCluster = {};
+
+            // Enhanced breakdown with status details
+            const areaStatusBreakdown = {};
+            const bankStatusBreakdown = {};
+            const fieldRiderStatusBreakdown = {};
+            const clusterStatusBreakdown = {};
+
+            consolidatedData.forEach(row => {
+                // By Area
+                byArea[row.area] = (byArea[row.area] || 0) + 1;
+                if (!areaStatusBreakdown[row.area]) areaStatusBreakdown[row.area] = {};
+                areaStatusBreakdown[row.area][row.status] = (areaStatusBreakdown[row.area][row.status] || 0) + 1;
+                
+                // By Bank
+                byBank[row.bank] = (byBank[row.bank] || 0) + 1;
+                if (!bankStatusBreakdown[row.bank]) bankStatusBreakdown[row.bank] = {};
+                bankStatusBreakdown[row.bank][row.status] = (bankStatusBreakdown[row.bank][row.status] || 0) + 1;
+                
+                // By User/Field Rider
+                byUser[row.fieldRider] = (byUser[row.fieldRider] || 0) + 1;
+                if (!fieldRiderStatusBreakdown[row.fieldRider]) fieldRiderStatusBreakdown[row.fieldRider] = {};
+                fieldRiderStatusBreakdown[row.fieldRider][row.status] = (fieldRiderStatusBreakdown[row.fieldRider][row.status] || 0) + 1;
+                
+                // By Status
+                byStatus[row.status] = (byStatus[row.status] || 0) + 1;
+                
+                // By Cluster
+                byCluster[row.cluster] = (byCluster[row.cluster] || 0) + 1;
+                if (!clusterStatusBreakdown[row.cluster]) clusterStatusBreakdown[row.cluster] = {};
+                clusterStatusBreakdown[row.cluster][row.status] = (clusterStatusBreakdown[row.cluster][row.status] || 0) + 1;
+            });
+
+            summaryStats = {
+                total: consolidatedData.length,
+                byArea: Object.entries(byArea).sort((a, b) => b[1] - a[1]),
+                byBank: Object.entries(byBank).sort((a, b) => b[1] - a[1]),
+                byUser: Object.entries(byUser).sort((a, b) => b[1] - a[1]),
+                byStatus: Object.entries(byStatus).sort((a, b) => b[1] - a[1]),
+                byCluster: Object.entries(byCluster).sort((a, b) => b[1] - a[1]),
+                statusBreakdowns: {
+                    area: areaStatusBreakdown,
+                    bank: bankStatusBreakdown,
+                    fieldRider: fieldRiderStatusBreakdown,
+                    cluster: clusterStatusBreakdown
+                }
+            };
+
+            updateSummaryUI();
+        }
+
+        function updateSummaryUI() {
+            if (!summaryStats) return;
+
+            // Update total records
+            document.querySelector('#total-records span').textContent = `Total Records: ${summaryStats.total.toLocaleString()}`;
+
+            // Update summary cards
+            const summaryCards = document.getElementById('summary-cards');
+            summaryCards.innerHTML = '';
+
+            const cardConfigs = [
+                { title: 'By Area', data: summaryStats.byArea, color: '#3B82F6', breakdownType: 'area', icon: 'map-pin' },
+                { title: 'By Bank', data: summaryStats.byBank, color: '#10B981', breakdownType: 'bank', icon: 'building' },
+                { title: 'By Field Rider', data: summaryStats.byUser, color: '#F59E0B', breakdownType: 'fieldRider', icon: 'users' },
+                { title: 'By Status', data: summaryStats.byStatus, color: '#EF4444', breakdownType: null, icon: 'bar-chart' },
+                { title: 'By Cluster', data: summaryStats.byCluster, color: '#8B5CF6', breakdownType: 'cluster', icon: 'settings' }
+            ];
+
+            cardConfigs.forEach(config => {
+                const card = createSummaryCard(config);
+                summaryCards.appendChild(card);
+            });
+
+            // Update data table
+            updateDataTable();
+        }
+
+        function createSummaryCard({ title, data, color, breakdownType, icon }) {
+            const total = data.reduce((sum, [, value]) => sum + value, 0);
+            
+            const card = document.createElement('div');
+            card.className = 'summary-card';
+            card.style.borderLeftColor = color;
+            
+            const iconSvg = getIconSvg(icon);
+            
+            card.innerHTML = `
+                <div class="summary-card-header">
+                    <h3 class="summary-card-title">${title}</h3>
+                    <div class="summary-card-actions">
+                        ${title !== 'By Status' ? `
+                            <button class="icon-btn breakdown-toggle" data-card-title="${title}" data-breakdown-type="${breakdownType}">
+                                <span style="font-size: 0.75rem; padding: 0.125rem 0.5rem;">Show Status</span>
+                            </button>
+                        ` : ''}
+                        <button class="icon-btn export-png-card" data-title="${title}">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                                <circle cx="8.5" cy="8.5" r="1.5"/>
+                                <polyline points="21,15 16,10 5,21"/>
+                            </svg>
+                        </button>
+                        <button class="icon-btn export-csv-card" data-title="${title}" data-data='${JSON.stringify(data)}'>
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7,10 12,15 17,10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                        </button>
+                        ${iconSvg}
+                    </div>
+                </div>
+                
+                <div class="summary-total">
+                    <span class="summary-total-label">Total ${title}</span>
+                    <span class="summary-total-value" style="color: ${color};">
+                        ${total.toLocaleString()}
+                    </span>
+                </div>
+                
+                <div class="summary-list">
+                    ${data.slice(0, 10).map(([key, value]) => {
+                        const statusBreakdown = getStatusBreakdown(key, breakdownType, title);
+                        return `
+                            <div class="summary-item">
+                                <div class="summary-item-main">
+                                    <span class="summary-item-label">${key}</span>
+                                    <div class="summary-item-actions">
+                                        <span class="summary-item-count">${value.toLocaleString()}</span>
+                                        <span class="summary-item-percent">${((value / total) * 100).toFixed(1)}%</span>
+                                    </div>
+                                </div>
+                                ${statusBreakdown.length > 0 ? `
+                                    <div class="breakdown-items hidden">
+                                        ${statusBreakdown.map(([status, count]) => `
+                                            <div class="breakdown-item">
+                                                <span class="breakdown-item-label">└ ${status}</span>
+                                                <div style="display: flex; gap: 0.25rem; align-items: center;">
+                                                    <span class="breakdown-item-count">${count}</span>
+                                                    <span class="breakdown-item-percent">${((count / value) * 100).toFixed(0)}%</span>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                    ${data.length > 10 ? `
+                        <div style="font-size: 0.75rem; color: #6b7280; padding-top: 0.5rem; border-top: 1px solid #f3f4f6;">
+                            ... and ${data.length - 10} more
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            // Add event listeners
+            const breakdownToggle = card.querySelector('.breakdown-toggle');
+            if (breakdownToggle) {
+                breakdownToggle.addEventListener('click', () => {
+                    const breakdownItems = card.querySelectorAll('.breakdown-items');
+                    const isShowing = breakdownToggle.classList.contains('active');
+                    
+                    breakdownItems.forEach(item => {
+                        if (isShowing) {
+                            item.classList.add('hidden');
+                        } else {
+                            item.classList.remove('hidden');
+                        }
+                    });
+                    
+                    breakdownToggle.classList.toggle('active');
+                    breakdownToggle.innerHTML = `<span style="font-size: 0.75rem; padding: 0.125rem 0.5rem;">${isShowing ? 'Show' : 'Hide'} Status</span>`;
+                });
+            }
+            
+            const exportPngBtn = card.querySelector('.export-png-card');
+            if (exportPngBtn) {
+                exportPngBtn.addEventListener('click', () => {
+                    exportCardToPNG(card, title);
+                });
+            }
+            
+            const exportCsvBtn = card.querySelector('.export-csv-card');
+            if (exportCsvBtn) {
+                exportCsvBtn.addEventListener('click', () => {
+                    exportSummaryToCSV(data, title);
+                });
+            }
+            
+            return card;
+        }
+
+        function getStatusBreakdown(itemName, breakdownType, title) {
+            if (title === "By Status" || !breakdownType || !summaryStats?.statusBreakdowns) {
+                return [];
+            }
+            
+            const breakdownData = summaryStats.statusBreakdowns[breakdownType];
+            if (!breakdownData || !breakdownData[itemName]) {
+                return [];
+            }
+            
+            return Object.entries(breakdownData[itemName]).sort((a, b) => b[1] - a[1]);
+        }
+
+        function getIconSvg(iconName) {
+            const icons = {
+                'map-pin': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+                'building': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v8h20v-8a2 2 0 0 0-2-2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>',
+                'users': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m22 21-3-3m0 0a4 4 0 1 0-2-2 4 4 0 0 0 2 2Z"/></svg>',
+                'bar-chart': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>',
+                'settings': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="m12 1 0 6m0 6 0 6m11-7-6 0m-6 0-6 0"/></svg>'
+            };
+            return icons[iconName] || '';
+        }
+
+        function updateDataTable() {
+            const tableBody = document.getElementById('table-body');
+            const tableFooter = document.getElementById('table-footer');
+            
+            tableBody.innerHTML = '';
+            
+            if (consolidatedData.length === 0) {
+                tableFooter.classList.add('hidden');
+                return;
+            }
+            
+            const displayData = consolidatedData.slice(0, 50);
+            
+            displayData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="font-weight: 500;">${row._fileName.replace('.csv', '')}</td>
+                    <td>${row.bank}</td>
+                    <td>${row.area}</td>
+                    <td>${row.cluster}</td>
+                    <td><span class="status-badge">${row.status}</span></td>
+                    <td>${row.fieldRider}</td>
+                    <td>${row.chCode}</td>
+                    <td>${row.date}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+            
+            if (consolidatedData.length > 50) {
+                tableFooter.textContent = `Showing first 50 of ${consolidatedData.length} records`;
+                tableFooter.classList.remove('hidden');
+            } else {
+                tableFooter.classList.add('hidden');
+            }
+        }
+
+        function exportToCSV(data, filename) {
+            try {
+                const csv = Papa.unparse(data);
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                link.href = url;
+                link.download = filename;
+                link.style.display = 'none';
+                
+                document.body.appendChild(link);
+                link.click();
+                
+                setTimeout(() => {
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                }, 100);
+                
+                console.log(`Successfully exported: ${filename}`);
+            } catch (error) {
+                console.error('Error exporting CSV:', error);
+                alert('Error exporting CSV file. Please try again.');
+            }
+        }
+
+        function exportSummaryToCSV(summaryData, title) {
+            try {
+                const csvData = summaryData.map(([key, value]) => ({
+                    [title]: key,
+                    Count: value
+                }));
+                
+                const total = summaryData.reduce((sum, [, value]) => sum + value, 0);
+                csvData.push({
+                    [title]: 'TOTAL',
+                    Count: total
+                });
+                
+                exportToCSV(csvData, `${title.replace(/\s+/g, '_')}_Summary.csv`);
+            } catch (error) {
+                console.error('Error exporting summary:', error);
+                alert('Error exporting summary. Please try again.');
+            }
+        }
+
+        function exportConsolidatedData() {
+            try {
+                const exportData = consolidatedData.map(row => ({
+                    File: row._fileName,
+                    Bank: row.bank,
+                    Area: row.area,
+                    Cluster: row.cluster,
+                    Status: row.status,
+                    'Field Rider': row.fieldRider,
+                    'CH Code': row.chCode,
+                    Date: row.date,
+                    'Sub Status': row.subStatus
+                }));
+                
+                exportToCSV(exportData, 'Consolidated_Data_Summary.csv');
+            } catch (error) {
+                console.error('Error exporting consolidated data:', error);
+                alert('Error exporting data. Please try again.');
+            }
+        }
+
+        function exportCardToPNG(cardElement, title) {
+            exportElementToPNG(cardElement, `${title.replace(/\s+/g, '_')}_Summary.png`);
+        }
+
+        function exportToPNG() {
+            const summaryContent = document.getElementById('summary-content');
+            exportElementToPNG(summaryContent, 'Complete_Summary_Report.png');
+        }
+
+        async function exportElementToPNG(element, filename) {
+            try {
+                if (!element) {
+                    alert('Content not available for export');
+                    return;
+                }
+
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                const rect = element.getBoundingClientRect();
+                const scale = 2;
+                canvas.width = rect.width * scale;
+                canvas.height = rect.height * scale;
+                
+                ctx.scale(scale, scale);
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, rect.width, rect.height);
+                
+                ctx.fillStyle = '#1f2937';
+                ctx.font = 'bold 18px system-ui';
+                ctx.fillText(filename.replace('.png', ''), 20, 30);
+                
+                ctx.font = '12px system-ui';
+                ctx.fillStyle = '#6b7280';
+                ctx.fillText(`Generated: ${new Date().toLocaleString()}`, 20, 60);
+                
+                const textContent = element.innerText || element.textContent || '';
+                const lines = textContent.split('\n').filter(line => line.trim());
+                
+                ctx.fillStyle = '#1f2937';
+                ctx.font = '14px system-ui';
+                
+                let yPosition = 90;
+                lines.forEach(line => {
+                    if (line.trim() && yPosition < canvas.height / scale - 20) {
+                        const maxWidth = rect.width - 40;
+                        const words = line.split(' ');
+                        let currentLine = '';
+                        
+                        words.forEach(word => {
+                            const testLine = currentLine + word + ' ';
+                            const metrics = ctx.measureText(testLine);
+                            
+                            if (metrics.width > maxWidth && currentLine !== '') {
+                                ctx.fillText(currentLine, 20, yPosition);
+                                yPosition += 20;
+                                currentLine = word + ' ';
+                            } else {
+                                currentLine = testLine;
+                            }
+                        });
+                        
+                        if (currentLine.trim()) {
+                            ctx.fillText(currentLine, 20, yPosition);
+                            yPosition += 20;
+                        }
+                    }
+                });
+                
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const link = document.createElement('a');
+                        const url = URL.createObjectURL(blob);
+                        link.href = url;
+                        link.download = filename;
+                        link.style.display = 'none';
+                        
+                        document.body.appendChild(link);
+                        link.click();
+                        
+                        setTimeout(() => {
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                        }, 100);
+                        
+                        console.log(`Successfully exported: ${filename}`);
+                    }
+                }, 'image/png', 0.95);
+                
+            } catch (error) {
+                console.error('Error exporting PNG:', error);
+                alert('Error exporting image. Please try the CSV export instead.');
+            }
+        }
+    </script>
+</body>
+</html>
