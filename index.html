@@ -1,10 +1,18 @@
-<!DOCTYPE html>
+function switchTab(tabName) {
+            // Update nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+      <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Data Summary Analytics</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -271,7 +279,7 @@
 
         .summary-card-header {
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
             margin-bottom: 1rem;
         }
@@ -331,8 +339,8 @@
         }
 
         .summary-list {
-            max-height: 400px;
-            overflow-y: auto;
+            max-height: none; /* Changed from 400px to show all items */
+            overflow-y: visible; /* Changed from auto */
         }
 
         .summary-item {
@@ -481,6 +489,51 @@
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
+        }
+
+        /* Export specific styles */
+        .export-preparing {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .export-modal {
+            background: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        /* For PNG export - ensure elements are visible */
+        .summary-export-area {
+            background: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+
+        .summary-export-area .summary-grid {
+            display: grid !important;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)) !important;
+            gap: 1.5rem !important;
+        }
+
+        /* Show all items in export mode */
+        .export-mode .summary-list {
+            max-height: none !important;
+            overflow: visible !important;
+        }
+
+        .export-mode .show-more-indicator {
+            display: none !important;
         }
 
         /* Utility Classes */
@@ -712,6 +765,50 @@
                 <div id="summary-content" class="summary-export-area">
                     <div class="summary-grid" id="summary-cards"></div>
                     
+                    <!-- Summary Table -->
+                    <div class="card">
+                        <div class="summary-header">
+                            <h3 class="text-lg font-semibold text-gray-900">Executive Summary Table</h3>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button id="toggle-summary-view" class="btn btn-secondary">
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                                        <polyline points="9,22 9,12 15,12 15,22"/>
+                                    </svg>
+                                    Switch View
+                                </button>
+                                <button id="export-summary-table" class="btn btn-green">
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="7,10 12,15 17,10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                    Export Summary
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table id="summary-table">
+                                <thead>
+                                    <tr id="summary-table-header">
+                                        <th style="background-color: #fee2e2; color: #991b1b; font-weight: bold;">AREA CLUSTER</th>
+                                        <th style="background-color: #fef3c7; color: #92400e; text-align: center;">VISITED</th>
+                                        <th style="background-color: #d1fae5; color: #065f46; text-align: center;">@1K/FS</th>
+                                        <th style="background-color: #dbeafe; color: #1e40af; text-align: center;">TOTALS</th>
+                                    </tr>
+                                    <tr id="summary-table-subheader">
+                                        <th style="background-color: #f3f4f6;"></th>
+                                        <th style="background-color: #f3f4f6; text-align: center; font-size: 0.75rem;">COUNT</th>
+                                        <th style="background-color: #f3f4f6; text-align: center; font-size: 0.75rem;">AMOUNT</th>
+                                        <th style="background-color: #f3f4f6; text-align: center; font-size: 0.75rem;">TOTAL</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="summary-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- Data Table -->
                     <div class="card">
                         <div class="summary-header">
@@ -751,573 +848,987 @@
     </div>
 
     <script>
-        // Global state
-        let files = [];
-        let parsedData = [];
-        let columnMappings = {};
-        let activeTab = 'upload';
-        let consolidatedData = [];
-        let summaryStats = null;
+    // Global state
+let files = [];
+let parsedData = [];
+let columnMappings = {};
+let activeTab = 'upload';
+let consolidatedData = [];
+let summaryStats = null;
 
-        // Standard column mappings
-        const standardColumns = {
-            bank: ['BANK NAME', 'BANK', 'bank_txt', 'BANK NAME REAL'],
-            area: ['AREA', 'FINAL AREA', 'final_area_txt'],
-            cluster: ['CLUSTER', 'CH CODE', 'CH NAME'],
-            status: ['account_status', 'STATUS', 'reported_status', 'OPEN CI STATUS'],
-            fieldRider: ['ASSIGNED FS', 'FIELDMAN', 'Creator'],
-            chCode: ['CH CODE', 'REF CODE'],
-            date: ['Creation Date', 'Result_Date', 'result_date', 'VISITED DATE', 'Modified Date'],
-            subStatus: ['sub_status', 'SUBSTATUS', 'PROGRESS']
-        };
+// Standard column mappings
+const standardColumns = {
+    bank: ['BANK NAME', 'BANK', 'bank_txt', 'BANK NAME REAL'],
+    area: ['AREA', 'FINAL AREA', 'final_area_txt'],
+    cluster: ['CLUSTER', 'CH CODE', 'CH NAME'],
+    status: ['account_status', 'STATUS', 'reported_status', 'OPEN CI STATUS'],
+    fieldRider: ['ASSIGNED FS', 'FIELDMAN', 'Creator'],
+    chCode: ['CH CODE', 'REF CODE'],
+    date: ['Creation Date', 'Result_Date', 'result_date', 'VISITED DATE', 'Modified Date'],
+    subStatus: ['sub_status', 'SUBSTATUS', 'PROGRESS']
+};
 
-        // Initialize app
-        document.addEventListener('DOMContentLoaded', function() {
-            initializeEventListeners();
-            updateCurrentDate();
+// Initialize app
+document.addEventListener('DOMContentLoaded', function() {
+    initializeEventListeners();
+    updateCurrentDate();
+});
+
+function initializeEventListeners() {
+    // Tab navigation
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            const tabName = e.currentTarget.getAttribute('data-tab');
+            switchTab(tabName);
+        });
+    });
+
+    // File upload
+    const fileInput = document.getElementById('file-input');
+    const dropzone = document.getElementById('dropzone');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', handleFileUpload);
+
+    // Drag and drop
+    dropzone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('dragover');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        processFiles(droppedFiles);
+    });
+
+    // Export buttons
+    document.getElementById('export-png').addEventListener('click', exportToPNG);
+    document.getElementById('export-csv').addEventListener('click', exportConsolidatedData);
+    document.getElementById('export-table').addEventListener('click', exportConsolidatedData);
+    document.getElementById('export-summary-table').addEventListener('click', exportSummaryTable);
+    document.getElementById('toggle-summary-view').addEventListener('click', toggleSummaryView);
+}
+
+function updateCurrentDate() {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    }) + ' ' + now.toLocaleTimeString('en-US', { 
+        hour: 'numeric', 
+        hour12: true 
+    });
+    document.getElementById('current-date').textContent = dateStr;
+}
+
+function switchTab(tabName) {
+    // Update nav tabs
+    document.querySelectorAll('.nav-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.add('hidden');
+    });
+    document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+
+    activeTab = tabName;
+}
+
+async function handleFileUpload(event) {
+    const uploadedFiles = Array.from(event.target.files);
+    await processFiles(uploadedFiles);
+}
+
+async function processFiles(uploadedFiles) {
+    document.getElementById('loading').classList.remove('hidden');
+    
+    try {
+        files = uploadedFiles;
+        parsedData = [];
+        
+        console.log('Processing files:', uploadedFiles.map(f => f.name));
+        
+        for (const file of uploadedFiles) {
+            const text = await file.text();
+            console.log(`File ${file.name} content preview:`, text.substring(0, 500));
+            
+            const parsed = Papa.parse(text, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                delimitersToGuess: [',', '\t', '|', ';']
+            });
+            
+            console.log(`Papa parse results for ${file.name}:`, parsed);
+            
+            // Clean headers by trimming whitespace and filter out empty rows
+            const cleanedData = parsed.data
+                .filter(row => {
+                    // Remove rows that are completely empty or only have null/undefined values
+                    const values = Object.values(row);
+                    return values.some(val => val !== null && val !== undefined && val !== '');
+                })
+                .map(row => {
+                    const cleanRow = {};
+                    Object.keys(row).forEach(key => {
+                        const cleanKey = key.trim();
+                        cleanRow[cleanKey] = row[key];
+                    });
+                    return cleanRow;
+                });
+            
+            console.log(`Cleaned data for ${file.name}:`, cleanedData.length, 'rows');
+            console.log('Sample row:', cleanedData[0]);
+            
+            parsedData.push({
+                name: file.name,
+                data: cleanedData,
+                headers: Object.keys(cleanedData[0] || {}),
+                rowCount: cleanedData.length
+            });
+        }
+        
+        console.log('Final parsed data:', parsedData);
+        
+        // Auto-detect column mappings
+        autoDetectColumnMappings();
+        
+        // Update UI
+        displayFileList();
+        updateConsolidatedData();
+        updateSummaryStats();
+        
+        // Switch to configure tab
+        switchTab('configure');
+        
+    } catch (error) {
+        console.error('Error parsing files:', error);
+        alert('Error processing files. Please try again.');
+    } finally {
+        document.getElementById('loading').classList.add('hidden');
+    }
+}
+
+function autoDetectColumnMappings() {
+    columnMappings = {};
+    parsedData.forEach((file, fileIndex) => {
+        columnMappings[fileIndex] = {};
+        Object.keys(standardColumns).forEach(stdCol => {
+            const matchedCol = file.headers.find(header => 
+                standardColumns[stdCol].some(variant => 
+                    header.toUpperCase().includes(variant.toUpperCase())
+                )
+            );
+            if (matchedCol) {
+                columnMappings[fileIndex][stdCol] = matchedCol;
+            }
+        });
+    });
+    updateConfigurationUI();
+}
+
+function displayFileList() {
+    const fileList = document.getElementById('file-list');
+    const fileItems = document.getElementById('file-items');
+    
+    if (parsedData.length === 0) {
+        fileList.classList.add('hidden');
+        return;
+    }
+    
+    fileList.classList.remove('hidden');
+    fileItems.innerHTML = '';
+    
+    console.log('Displaying file list for', parsedData.length, 'files');
+    
+    parsedData.forEach(file => {
+        console.log(`File: ${file.name}, Rows: ${file.rowCount}, Headers:`, file.headers);
+        
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-item';
+        fileItem.innerHTML = `
+            <div class="file-item-info">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #059669;">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14,2 14,8 20,8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10,9 9,9 8,9"/>
+                </svg>
+                <span class="font-semibold" style="color: #065f46;">${file.name}</span>
+                <button onclick="showFileDetails('${file.name}')" style="margin-left: 0.5rem; padding: 0.25rem 0.5rem; background: #e5e7eb; border: none; border-radius: 0.25rem; font-size: 0.75rem; cursor: pointer;">
+                    View Details
+                </button>
+            </div>
+            <div class="file-item-stats">
+                ${file.rowCount} rows, ${file.headers.length} columns
+            </div>
+        `;
+        fileItems.appendChild(fileItem);
+    });
+}
+
+function showFileDetails(fileName) {
+    const file = parsedData.find(f => f.name === fileName);
+    if (!file) return;
+    
+    const details = `
+File: ${file.name}
+Rows: ${file.rowCount}
+Columns: ${file.headers.length}
+
+Headers:
+${file.headers.join(', ')}
+
+Sample Data (first 3 rows):
+${file.data.slice(0, 3).map((row, i) => 
+    `Row ${i + 1}: ${JSON.stringify(row, null, 2)}`
+).join('\n\n')}
+    `;
+    
+    console.log('File Details:', details);
+    alert(details);
+}
+
+function updateConfigurationUI() {
+    const configFiles = document.getElementById('config-files');
+    configFiles.innerHTML = '';
+    
+    parsedData.forEach((file, fileIndex) => {
+        const configFile = document.createElement('div');
+        configFile.className = 'config-file';
+        
+        const headerHTML = `
+            <h3 class="text-lg font-semibold text-gray-900 mb-4" style="display: flex; align-items: center; gap: 0.5rem;">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14,2 14,8 20,8"/>
+                </svg>
+                ${file.name}
+            </h3>
+        `;
+        
+        const gridHTML = `
+            <div class="config-grid">
+                ${Object.keys(standardColumns).map(columnType => `
+                    <div class="form-group">
+                        <label class="form-label">
+                            ${columnType.replace(/([A-Z])/g, ' $1').trim()}
+                        </label>
+                        <select class="form-select" data-file-index="${fileIndex}" data-column-type="${columnType}">
+                            <option value="">Select column...</option>
+                            ${file.headers.map(header => `
+                                <option value="${header}" ${columnMappings[fileIndex]?.[columnType] === header ? 'selected' : ''}>
+                                    ${header}
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        configFile.innerHTML = headerHTML + gridHTML;
+        configFiles.appendChild(configFile);
+    });
+    
+    // Add event listeners to selects
+    document.querySelectorAll('.form-select').forEach(select => {
+        select.addEventListener('change', (e) => {
+            const fileIndex = parseInt(e.target.getAttribute('data-file-index'));
+            const columnType = e.target.getAttribute('data-column-type');
+            const selectedColumn = e.target.value;
+            
+            updateColumnMapping(fileIndex, columnType, selectedColumn);
+        });
+    });
+}
+
+function updateColumnMapping(fileIndex, columnType, selectedColumn) {
+    if (!columnMappings[fileIndex]) {
+        columnMappings[fileIndex] = {};
+    }
+    columnMappings[fileIndex][columnType] = selectedColumn;
+    
+    updateConsolidatedData();
+    updateSummaryStats();
+}
+
+function updateConsolidatedData() {
+    if (!parsedData.length) {
+        consolidatedData = [];
+        console.log('No parsed data available');
+        return;
+    }
+    
+    consolidatedData = [];
+    console.log('Starting consolidation with', parsedData.length, 'files');
+    
+    parsedData.forEach((file, fileIndex) => {
+        const mapping = columnMappings[fileIndex] || {};
+        console.log(`Processing file ${file.name} with ${file.data.length} rows and mapping:`, mapping);
+        
+        file.data.forEach(row => {
+            // Skip completely empty rows
+            const hasData = Object.values(row).some(val => val !== null && val !== undefined && val !== '');
+            if (!hasData) {
+                return;
+            }
+            
+            const consolidatedRow = {
+                _fileName: file.name,
+                _fileIndex: fileIndex,
+                bank: row[mapping.bank] || 'Unknown',
+                area: row[mapping.area] || 'Unknown',
+                cluster: row[mapping.cluster] || 'Unknown',
+                status: row[mapping.status] || 'Unknown',
+                fieldRider: row[mapping.fieldRider] || 'Unknown',
+                chCode: row[mapping.chCode] || 'Unknown',
+                date: row[mapping.date] || 'Unknown',
+                subStatus: row[mapping.subStatus] || 'Unknown',
+                _originalRow: row
+            };
+            consolidatedData.push(consolidatedRow);
+        });
+        
+        console.log(`Added ${file.data.length} rows from ${file.name}. Total consolidated: ${consolidatedData.length}`);
+    });
+    
+    console.log('Final consolidated data:', consolidatedData.length, 'total rows');
+}
+
+function updateSummaryStats() {
+    if (!consolidatedData.length) {
+        summaryStats = null;
+        return;
+    }
+
+    const byArea = {};
+    const byBank = {};
+    const byUser = {};
+    const byStatus = {};
+    const byCluster = {};
+
+    // Enhanced breakdown with status details
+    const areaStatusBreakdown = {};
+    const bankStatusBreakdown = {};
+    const fieldRiderStatusBreakdown = {};
+    const clusterStatusBreakdown = {};
+
+    consolidatedData.forEach(row => {
+        // By Area
+        byArea[row.area] = (byArea[row.area] || 0) + 1;
+        if (!areaStatusBreakdown[row.area]) areaStatusBreakdown[row.area] = {};
+        areaStatusBreakdown[row.area][row.status] = (areaStatusBreakdown[row.area][row.status] || 0) + 1;
+        
+        // By Bank
+        byBank[row.bank] = (byBank[row.bank] || 0) + 1;
+        if (!bankStatusBreakdown[row.bank]) bankStatusBreakdown[row.bank] = {};
+        bankStatusBreakdown[row.bank][row.status] = (bankStatusBreakdown[row.bank][row.status] || 0) + 1;
+        
+        // By User/Field Rider
+        byUser[row.fieldRider] = (byUser[row.fieldRider] || 0) + 1;
+        if (!fieldRiderStatusBreakdown[row.fieldRider]) fieldRiderStatusBreakdown[row.fieldRider] = {};
+        fieldRiderStatusBreakdown[row.fieldRider][row.status] = (fieldRiderStatusBreakdown[row.fieldRider][row.status] || 0) + 1;
+        
+        // By Status
+        byStatus[row.status] = (byStatus[row.status] || 0) + 1;
+        
+        // By Cluster
+        byCluster[row.cluster] = (byCluster[row.cluster] || 0) + 1;
+        if (!clusterStatusBreakdown[row.cluster]) clusterStatusBreakdown[row.cluster] = {};
+        clusterStatusBreakdown[row.cluster][row.status] = (clusterStatusBreakdown[row.cluster][row.status] || 0) + 1;
+    });
+
+    summaryStats = {
+        total: consolidatedData.length,
+        byArea: Object.entries(byArea).sort((a, b) => b[1] - a[1]),
+        byBank: Object.entries(byBank).sort((a, b) => b[1] - a[1]),
+        byUser: Object.entries(byUser).sort((a, b) => b[1] - a[1]),
+        byStatus: Object.entries(byStatus).sort((a, b) => b[1] - a[1]),
+        byCluster: Object.entries(byCluster).sort((a, b) => b[1] - a[1]),
+        statusBreakdowns: {
+            area: areaStatusBreakdown,
+            bank: bankStatusBreakdown,
+            fieldRider: fieldRiderStatusBreakdown,
+            cluster: clusterStatusBreakdown
+        }
+    };
+
+    updateSummaryUI();
+}
+
+function updateSummaryUI() {
+    if (!summaryStats) return;
+
+    // Update total records
+    document.querySelector('#total-records span').textContent = `Total Records: ${summaryStats.total.toLocaleString()}`;
+
+    // Update summary cards
+    const summaryCards = document.getElementById('summary-cards');
+    summaryCards.innerHTML = '';
+
+    const cardConfigs = [
+        { title: 'By Area', data: summaryStats.byArea, color: '#3B82F6', breakdownType: 'area', icon: 'map-pin' },
+        { title: 'By Bank', data: summaryStats.byBank, color: '#10B981', breakdownType: 'bank', icon: 'building' },
+        { title: 'By Field Rider', data: summaryStats.byUser, color: '#F59E0B', breakdownType: 'fieldRider', icon: 'users' },
+        { title: 'By Status', data: summaryStats.byStatus, color: '#EF4444', breakdownType: null, icon: 'bar-chart' },
+        { title: 'By Cluster', data: summaryStats.byCluster, color: '#8B5CF6', breakdownType: 'cluster', icon: 'settings' }
+    ];
+
+    cardConfigs.forEach(config => {
+        const card = createSummaryCard(config);
+        summaryCards.appendChild(card);
+    });
+
+    // Update summary table
+    updateSummaryTable();
+
+    // Update data table
+    updateDataTable();
+}
+
+function createSummaryCard({ title, data, color, breakdownType, icon }) {
+    const total = data.reduce((sum, [, value]) => sum + value, 0);
+    
+    const card = document.createElement('div');
+    card.className = 'summary-card';
+    card.style.borderLeftColor = color;
+    
+    const iconSvg = getIconSvg(icon);
+    
+    card.innerHTML = `
+        <div class="summary-card-header">
+            <h3 class="summary-card-title">${title}</h3>
+            <div class="summary-card-actions">
+                ${title !== 'By Status' ? `
+                    <button class="icon-btn breakdown-toggle" data-card-title="${title}" data-breakdown-type="${breakdownType}">
+                        <span style="font-size: 0.75rem; padding: 0.125rem 0.5rem;">Show Status</span>
+                    </button>
+                ` : ''}
+                <button class="icon-btn export-png-card" data-title="${title}">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21,15 16,10 5,21"/>
+                    </svg>
+                </button>
+                <button class="icon-btn export-csv-card" data-title="${title}" data-data='${JSON.stringify(data)}'>
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7,10 12,15 17,10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                </button>
+                ${iconSvg}
+            </div>
+        </div>
+        
+        <div class="summary-total">
+            <span class="summary-total-label">Total ${title}</span>
+            <span class="summary-total-value" style="color: ${color};">
+                ${total.toLocaleString()}
+            </span>
+        </div>
+        
+        <div class="summary-list">
+            ${data.map(([key, value]) => {
+                const statusBreakdown = getStatusBreakdown(key, breakdownType, title);
+                return `
+                    <div class="summary-item">
+                        <div class="summary-item-main">
+                            <span class="summary-item-label">${key}</span>
+                            <div class="summary-item-actions">
+                                <span class="summary-item-count">${value.toLocaleString()}</span>
+                                <span class="summary-item-percent">${((value / total) * 100).toFixed(1)}%</span>
+                            </div>
+                        </div>
+                        ${statusBreakdown.length > 0 ? `
+                            <div class="breakdown-items hidden">
+                                ${statusBreakdown.map(([status, count]) => `
+                                    <div class="breakdown-item">
+                                        <span class="breakdown-item-label">└ ${status}</span>
+                                        <div style="display: flex; gap: 0.25rem; align-items: center;">
+                                            <span class="breakdown-item-count">${count}</span>
+                                            <span class="breakdown-item-percent">${((count / value) * 100).toFixed(0)}%</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+    
+    // Add event listeners
+    const breakdownToggle = card.querySelector('.breakdown-toggle');
+    if (breakdownToggle) {
+        breakdownToggle.addEventListener('click', () => {
+            const breakdownItems = card.querySelectorAll('.breakdown-items');
+            const isShowing = breakdownToggle.classList.contains('active');
+            
+            breakdownItems.forEach(item => {
+                if (isShowing) {
+                    item.classList.add('hidden');
+                } else {
+                    item.classList.remove('hidden');
+                }
+            });
+            
+            breakdownToggle.classList.toggle('active');
+            breakdownToggle.innerHTML = `<span style="font-size: 0.75rem; padding: 0.125rem 0.5rem;">${isShowing ? 'Show' : 'Hide'} Status</span>`;
+        });
+    }
+    
+    const exportPngBtn = card.querySelector('.export-png-card');
+    if (exportPngBtn) {
+        exportPngBtn.addEventListener('click', () => {
+            exportCardToPNG(card, title);
+        });
+    }
+    
+    const exportCsvBtn = card.querySelector('.export-csv-card');
+    if (exportCsvBtn) {
+        exportCsvBtn.addEventListener('click', () => {
+            exportSummaryToCSV(data, title);
+        });
+    }
+    
+    return card;
+}
+
+function updateSummaryTable() {
+    if (!summaryStats || !consolidatedData.length) return;
+
+    // Create area-based summary similar to your example
+    const areaGroups = {};
+    
+    consolidatedData.forEach(row => {
+        const areaKey = row.area || 'Unknown';
+        if (!areaGroups[areaKey]) {
+            areaGroups[areaKey] = {
+                visited: 0,
+                amount: 0,
+                fieldRiders: new Set(),
+                banks: new Set(),
+                statuses: {},
+                clusters: new Set()
+            };
+        }
+        
+        areaGroups[areaKey].visited += 1;
+        areaGroups[areaKey].amount += 1000; // Assuming 1K per record
+        areaGroups[areaKey].fieldRiders.add(row.fieldRider);
+        areaGroups[areaKey].banks.add(row.bank);
+        areaGroups[areaKey].clusters.add(row.cluster);
+        
+        const status = row.status || 'Unknown';
+        areaGroups[areaKey].statuses[status] = (areaGroups[areaKey].statuses[status] || 0) + 1;
+    });
+
+    const tableBody = document.getElementById('summary-table-body');
+    tableBody.innerHTML = '';
+
+    // Sort areas by visited count (descending)
+    const sortedAreas = Object.entries(areaGroups).sort((a, b) => b[1].visited - a[1].visited);
+
+    let totalVisited = 0;
+    let totalAmount = 0;
+
+    sortedAreas.forEach(([area, data]) => {
+        totalVisited += data.visited;
+        totalAmount += data.amount;
+
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #e5e7eb';
+        
+        // Area name with alternating row colors
+        const areaCell = document.createElement('td');
+        areaCell.style.padding = '0.75rem 1rem';
+        areaCell.style.fontWeight = 'bold';
+        areaCell.style.backgroundColor = '#f9fafb';
+        areaCell.textContent = area.toUpperCase();
+        tr.appendChild(areaCell);
+
+        // Visited count
+        const visitedCell = document.createElement('td');
+        visitedCell.style.padding = '0.75rem 1rem';
+        visitedCell.style.textAlign = 'center';
+        visitedCell.style.backgroundColor = '#fef3c7';
+        visitedCell.style.fontWeight = '600';
+        visitedCell.textContent = data.visited.toLocaleString();
+        tr.appendChild(visitedCell);
+
+        // Amount (@1K/FS)
+        const amountCell = document.createElement('td');
+        amountCell.style.padding = '0.75rem 1rem';
+        amountCell.style.textAlign = 'center';
+        amountCell.style.backgroundColor = '#d1fae5';
+        amountCell.style.fontWeight = '600';
+        amountCell.textContent = data.amount.toLocaleString();
+        tr.appendChild(amountCell);
+
+        // Total (same as visited for now)
+        const totalCell = document.createElement('td');
+        totalCell.style.padding = '0.75rem 1rem';
+        totalCell.style.textAlign = 'center';
+        totalCell.style.backgroundColor = '#dbeafe';
+        totalCell.style.fontWeight = '600';
+        totalCell.textContent = data.visited.toLocaleString();
+        tr.appendChild(totalCell);
+
+        tableBody.appendChild(tr);
+
+        // Add status breakdown row
+        const statusRow = document.createElement('tr');
+        statusRow.style.backgroundColor = '#f8fafc';
+        statusRow.style.fontSize = '0.875rem';
+
+        const statusCell = document.createElement('td');
+        statusCell.colSpan = 4;
+        statusCell.style.padding = '0.5rem 1rem 0.5rem 2rem';
+        statusCell.style.color = '#6b7280';
+        
+        const statusBreakdown = Object.entries(data.statuses)
+            .sort((a, b) => b[1] - a[1])
+            .map(([status, count]) => `${status}: ${count}`)
+            .join(' | ');
+        
+        statusCell.innerHTML = `<em>Status breakdown: ${statusBreakdown}</em>`;
+        statusRow.appendChild(statusCell);
+        tableBody.appendChild(statusRow);
+    });
+
+    // Add totals row
+    const totalsRow = document.createElement('tr');
+    totalsRow.style.borderTop = '3px solid #374151';
+    totalsRow.style.backgroundColor = '#f3f4f6';
+    totalsRow.style.fontWeight = 'bold';
+
+    const totalAreaCell = document.createElement('td');
+    totalAreaCell.style.padding = '1rem';
+    totalAreaCell.style.color = '#1f2937';
+    totalAreaCell.style.fontSize = '1rem';
+    totalAreaCell.textContent = 'TOTAL';
+    totalsRow.appendChild(totalAreaCell);
+
+    const totalVisitedCell = document.createElement('td');
+    totalVisitedCell.style.padding = '1rem';
+    totalVisitedCell.style.textAlign = 'center';
+    totalVisitedCell.style.color = '#92400e';
+    totalVisitedCell.style.fontSize = '1rem';
+    totalVisitedCell.textContent = totalVisited.toLocaleString();
+    totalsRow.appendChild(totalVisitedCell);
+
+    const totalAmountCell = document.createElement('td');
+    totalAmountCell.style.padding = '1rem';
+    totalAmountCell.style.textAlign = 'center';
+    totalAmountCell.style.color = '#065f46';
+    totalAmountCell.style.fontSize = '1rem';
+    totalAmountCell.textContent = totalAmount.toLocaleString();
+    totalsRow.appendChild(totalAmountCell);
+
+    const totalTotalCell = document.createElement('td');
+    totalTotalCell.style.padding = '1rem';
+    totalTotalCell.style.textAlign = 'center';
+    totalTotalCell.style.color = '#1e40af';
+    totalTotalCell.style.fontSize = '1rem';
+    totalTotalCell.textContent = totalVisited.toLocaleString();
+    totalsRow.appendChild(totalTotalCell);
+
+    tableBody.appendChild(totalsRow);
+}
+
+function toggleSummaryView() {
+    const summaryTable = document.querySelector('#summary-table').closest('.card');
+    const regularCards = document.getElementById('summary-cards').closest('.summary-grid');
+    const toggleBtn = document.getElementById('toggle-summary-view');
+    
+    if (summaryTable.style.display === 'none') {
+        summaryTable.style.display = 'block';
+        regularCards.style.display = 'none';
+        toggleBtn.innerHTML = `
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="20" x2="12" y2="10"/>
+                <line x1="18" y1="20" x2="18" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="16"/>
+            </svg>
+            Card View
+        `;
+    } else {
+        summaryTable.style.display = 'none';
+        regularCards.style.display = 'grid';
+        toggleBtn.innerHTML = `
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9,22 9,12 15,12 15,22"/>
+            </svg>
+            Table View
+        `;
+    }
+}
+
+function exportSummaryTable() {
+    try {
+        if (!summaryStats || !consolidatedData.length) {
+            alert('No data available to export');
+            return;
+        }
+
+        // Create area-based summary for export
+        const areaGroups = {};
+        
+        consolidatedData.forEach(row => {
+            const areaKey = row.area || 'Unknown';
+            if (!areaGroups[areaKey]) {
+                areaGroups[areaKey] = {
+                    visited: 0,
+                    amount: 0,
+                    statuses: {}
+                };
+            }
+            
+            areaGroups[areaKey].visited += 1;
+            areaGroups[areaKey].amount += 1000;
+            
+            const status = row.status || 'Unknown';
+            areaGroups[areaKey].statuses[status] = (areaGroups[areaKey].statuses[status] || 0) + 1;
         });
 
-        function initializeEventListeners() {
-            // Tab navigation
-            document.querySelectorAll('.nav-tab').forEach(tab => {
-                tab.addEventListener('click', (e) => {
-                    const tabName = e.currentTarget.getAttribute('data-tab');
-                    switchTab(tabName);
-                });
+        const exportData = Object.entries(areaGroups)
+            .sort((a, b) => b[1].visited - a[1].visited)
+            .map(([area, data]) => {
+                const statusBreakdown = Object.entries(data.statuses)
+                    .map(([status, count]) => `${status}: ${count}`)
+                    .join(' | ');
+                
+                return {
+                    'Area': area,
+                    'Visited Count': data.visited,
+                    'Amount (@1K)': data.amount,
+                    'Total': data.visited,
+                    'Status Breakdown': statusBreakdown
+                };
             });
 
-            // File upload
-            const fileInput = document.getElementById('file-input');
-            const dropzone = document.getElementById('dropzone');
+        // Add totals row
+        const totalVisited = Object.values(areaGroups).reduce((sum, data) => sum + data.visited, 0);
+        const totalAmount = Object.values(areaGroups).reduce((sum, data) => sum + data.amount, 0);
+        
+        exportData.push({
+            'Area': 'TOTAL',
+            'Visited Count': totalVisited,
+            'Amount (@1K)': totalAmount,
+            'Total': totalVisited,
+            'Status Breakdown': 'All Areas Combined'
+        });
 
-            dropzone.addEventListener('click', () => fileInput.click());
-            fileInput.addEventListener('change', handleFileUpload);
+        exportToCSV(exportData, 'Executive_Summary_Table.csv');
+    } catch (error) {
+        console.error('Error exporting summary table:', error);
+        alert('Error exporting summary table. Please try again.');
+    }
+}
 
-            // Drag and drop
-            dropzone.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                dropzone.classList.add('dragover');
-            });
+function getStatusBreakdown(itemName, breakdownType, title) {
+    if (title === "By Status" || !breakdownType || !summaryStats?.statusBreakdowns) {
+        return [];
+    }
+    
+    const breakdownData = summaryStats.statusBreakdowns[breakdownType];
+    if (!breakdownData || !breakdownData[itemName]) {
+        return [];
+    }
+    
+    return Object.entries(breakdownData[itemName]).sort((a, b) => b[1] - a[1]);
+}
 
-            dropzone.addEventListener('dragleave', () => {
-                dropzone.classList.remove('dragover');
-            });
+function getIconSvg(iconName) {
+    const icons = {
+        'map-pin': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+        'building': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v8h20v-8a2 2 0 0 0-2-2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>',
+        'users': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m22 21-3-3m0 0a4 4 0 1 0-2-2 4 4 0 0 0 2 2Z"/></svg>',
+        'bar-chart': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>',
+        'settings': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="m12 1 0 6m0 6 0 6m11-7-6 0m-6 0-6 0"/></svg>'
+    };
+    return icons[iconName] || '';
+}
 
-            dropzone.addEventListener('drop', (e) => {
-                e.preventDefault();
-                dropzone.classList.remove('dragover');
-                const droppedFiles = Array.from(e.dataTransfer.files);
-                processFiles(droppedFiles);
-            });
+function updateDataTable() {
+    const tableBody = document.getElementById('table-body');
+    const tableFooter = document.getElementById('table-footer');
+    
+    tableBody.innerHTML = '';
+    
+    if (consolidatedData.length === 0) {
+        tableFooter.classList.add('hidden');
+        return;
+    }
+    
+    const displayData = consolidatedData.slice(0, 50);
+    
+    displayData.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td style="font-weight: 500;">${row._fileName.replace('.csv', '')}</td>
+            <td>${row.bank}</td>
+            <td>${row.area}</td>
+            <td>${row.cluster}</td>
+            <td><span class="status-badge">${row.status}</span></td>
+            <td>${row.fieldRider}</td>
+            <td>${row.chCode}</td>
+            <td>${row.date}</td>
+        `;
+        tableBody.appendChild(tr);
+    });
+    
+    if (consolidatedData.length > 50) {
+        tableFooter.textContent = `Showing first 50 of ${consolidatedData.length} records`;
+        tableFooter.classList.remove('hidden');
+    } else {
+        tableFooter.classList.add('hidden');
+    }
+}
 
-            // Export buttons
-            document.getElementById('export-png').addEventListener('click', exportToPNG);
-            document.getElementById('export-csv').addEventListener('click', exportConsolidatedData);
-            document.getElementById('export-table').addEventListener('click', exportConsolidatedData);
+function exportToCSV(data, filename) {
+    try {
+        const csv = Papa.unparse(data);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        
+        setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+        console.log(`Successfully exported: ${filename}`);
+    } catch (error) {
+        console.error('Error exporting CSV:', error);
+        alert('Error exporting CSV file. Please try again.');
+    }
+}
+
+function exportSummaryToCSV(summaryData, title) {
+    try {
+        const csvData = summaryData.map(([key, value]) => ({
+            [title]: key,
+            Count: value
+        }));
+        
+        const total = summaryData.reduce((sum, [, value]) => sum + value, 0);
+        csvData.push({
+            [title]: 'TOTAL',
+            Count: total
+        });
+        
+        exportToCSV(csvData, `${title.replace(/\s+/g, '_')}_Summary.csv`);
+    } catch (error) {
+        console.error('Error exporting summary:', error);
+        alert('Error exporting summary. Please try again.');
+    }
+}
+
+function exportConsolidatedData() {
+    try {
+        const exportData = consolidatedData.map(row => ({
+            File: row._fileName,
+            Bank: row.bank,
+            Area: row.area,
+            Cluster: row.cluster,
+            Status: row.status,
+            'Field Rider': row.fieldRider,
+            'CH Code': row.chCode,
+            Date: row.date,
+            'Sub Status': row.subStatus
+        }));
+        
+        exportToCSV(exportData, 'Consolidated_Data_Summary.csv');
+    } catch (error) {
+        console.error('Error exporting consolidated data:', error);
+        alert('Error exporting data. Please try again.');
+    }
+}
+
+function exportCardToPNG(cardElement, title) {
+    exportElementToPNG(cardElement, `${title.replace(/\s+/g, '_')}_Summary.png`);
+}
+
+function exportToPNG() {
+    const summaryContent = document.getElementById('summary-content');
+    exportElementToPNG(summaryContent, 'Complete_Summary_Report.png');
+}
+
+async function exportElementToPNG(element, filename) {
+    try {
+        if (!element) {
+            alert('Content not available for export');
+            return;
         }
 
-        function updateCurrentDate() {
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('en-US', { 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-            }) + ' ' + now.toLocaleTimeString('en-US', { 
-                hour: 'numeric', 
-                hour12: true 
-            });
-            document.getElementById('current-date').textContent = dateStr;
+        // Check if html2canvas is available
+        if (typeof html2canvas === 'undefined') {
+            alert('PNG export library not loaded. Please refresh the page and try again.');
+            return;
         }
 
-        function switchTab(tabName) {
-            // Update nav tabs
-            document.querySelectorAll('.nav-tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+        // Show loading modal
+        const loadingModal = document.createElement('div');
+        loadingModal.className = 'export-preparing';
+        loadingModal.innerHTML = `
+            <div class="export-modal">
+                <div class="spinner" style="margin: 0 auto 1rem;"></div>
+                <h3 style="margin-bottom: 0.5rem;">Preparing PNG Export...</h3>
+                <p style="color: #6b7280;">This may take a few moments</p>
+            </div>
+        `;
+        document.body.appendChild(loadingModal);
 
-            // Update tab content
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.classList.add('hidden');
-            });
-            document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+        // Add export mode class to show all items
+        element.classList.add('export-mode');
 
-            activeTab = tabName;
-        }
+        // Wait a moment for the UI to update
+        await new Promise(resolve => setTimeout(resolve, 100));
 
-        async function handleFileUpload(event) {
-            const uploadedFiles = Array.from(event.target.files);
-            await processFiles(uploadedFiles);
-        }
+        // Use html2canvas to capture the element with its styling
+        const canvas = await html2canvas(element, {
+            backgroundColor: '#ffffff',
+            scale: 2,
+            useCORS: true,
+            allowTaint: true,
+            scrollX: 0,
+            scrollY: 0,
+            width: element.scrollWidth,
+            height: element.scrollHeight,
+            windowWidth: window.innerWidth,
+            windowHeight: window.innerHeight
+        });
 
-        async function processFiles(uploadedFiles) {
-            document.getElementById('loading').classList.remove('hidden');
-            
-            try {
-                files = uploadedFiles;
-                parsedData = [];
-                
-                for (const file of uploadedFiles) {
-                    const text = await file.text();
-                    const parsed = Papa.parse(text, {
-                        header: true,
-                        dynamicTyping: true,
-                        skipEmptyLines: true,
-                        delimitersToGuess: [',', '\t', '|', ';']
-                    });
-                    
-                    // Clean headers by trimming whitespace
-                    const cleanedData = parsed.data.map(row => {
-                        const cleanRow = {};
-                        Object.keys(row).forEach(key => {
-                            const cleanKey = key.trim();
-                            cleanRow[cleanKey] = row[key];
-                        });
-                        return cleanRow;
-                    });
-                    
-                    parsedData.push({
-                        name: file.name,
-                        data: cleanedData,
-                        headers: Object.keys(cleanedData[0] || {}),
-                        rowCount: cleanedData.length
-                    });
-                }
-                
-                // Auto-detect column mappings
-                autoDetectColumnMappings();
-                
-                // Update UI
-                displayFileList();
-                updateConsolidatedData();
-                updateSummaryStats();
-                
-                // Switch to configure tab
-                switchTab('configure');
-                
-            } catch (error) {
-                console.error('Error parsing files:', error);
-                alert('Error processing files. Please try again.');
-            } finally {
-                document.getElementById('loading').classList.add('hidden');
-            }
-        }
+        // Remove export mode class
+        element.classList.remove('export-mode');
 
-        function autoDetectColumnMappings() {
-            columnMappings = {};
-            parsedData.forEach((file, fileIndex) => {
-                columnMappings[fileIndex] = {};
-                Object.keys(standardColumns).forEach(stdCol => {
-                    const matchedCol = file.headers.find(header => 
-                        standardColumns[stdCol].some(variant => 
-                            header.toUpperCase().includes(variant.toUpperCase())
-                        )
-                    );
-                    if (matchedCol) {
-                        columnMappings[fileIndex][stdCol] = matchedCol;
-                    }
-                });
-            });
-            updateConfigurationUI();
-        }
-
-        function displayFileList() {
-            const fileList = document.getElementById('file-list');
-            const fileItems = document.getElementById('file-items');
-            
-            if (parsedData.length === 0) {
-                fileList.classList.add('hidden');
-                return;
-            }
-            
-            fileList.classList.remove('hidden');
-            fileItems.innerHTML = '';
-            
-            parsedData.forEach(file => {
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
-                fileItem.innerHTML = `
-                    <div class="file-item-info">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: #059669;">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14,2 14,8 20,8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                            <polyline points="10,9 9,9 8,9"/>
-                        </svg>
-                        <span class="font-semibold" style="color: #065f46;">${file.name}</span>
-                    </div>
-                    <div class="file-item-stats">
-                        ${file.rowCount} rows, ${file.headers.length} columns
-                    </div>
-                `;
-                fileItems.appendChild(fileItem);
-            });
-        }
-
-        function updateConfigurationUI() {
-            const configFiles = document.getElementById('config-files');
-            configFiles.innerHTML = '';
-            
-            parsedData.forEach((file, fileIndex) => {
-                const configFile = document.createElement('div');
-                configFile.className = 'config-file';
-                
-                const headerHTML = `
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4" style="display: flex; align-items: center; gap: 0.5rem;">
-                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14,2 14,8 20,8"/>
-                        </svg>
-                        ${file.name}
-                    </h3>
-                `;
-                
-                const gridHTML = `
-                    <div class="config-grid">
-                        ${Object.keys(standardColumns).map(columnType => `
-                            <div class="form-group">
-                                <label class="form-label">
-                                    ${columnType.replace(/([A-Z])/g, ' $1').trim()}
-                                </label>
-                                <select class="form-select" data-file-index="${fileIndex}" data-column-type="${columnType}">
-                                    <option value="">Select column...</option>
-                                    ${file.headers.map(header => `
-                                        <option value="${header}" ${columnMappings[fileIndex]?.[columnType] === header ? 'selected' : ''}>
-                                            ${header}
-                                        </option>
-                                    `).join('')}
-                                </select>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-                
-                configFile.innerHTML = headerHTML + gridHTML;
-                configFiles.appendChild(configFile);
-            });
-            
-            // Add event listeners to selects
-            document.querySelectorAll('.form-select').forEach(select => {
-                select.addEventListener('change', (e) => {
-                    const fileIndex = parseInt(e.target.getAttribute('data-file-index'));
-                    const columnType = e.target.getAttribute('data-column-type');
-                    const selectedColumn = e.target.value;
-                    
-                    updateColumnMapping(fileIndex, columnType, selectedColumn);
-                });
-            });
-        }
-
-        function updateColumnMapping(fileIndex, columnType, selectedColumn) {
-            if (!columnMappings[fileIndex]) {
-                columnMappings[fileIndex] = {};
-            }
-            columnMappings[fileIndex][columnType] = selectedColumn;
-            
-            updateConsolidatedData();
-            updateSummaryStats();
-        }
-
-        function updateConsolidatedData() {
-            if (!parsedData.length) {
-                consolidatedData = [];
-                return;
-            }
-            
-            consolidatedData = [];
-            
-            parsedData.forEach((file, fileIndex) => {
-                const mapping = columnMappings[fileIndex] || {};
-                
-                file.data.forEach(row => {
-                    const consolidatedRow = {
-                        _fileName: file.name,
-                        _fileIndex: fileIndex,
-                        bank: row[mapping.bank] || 'Unknown',
-                        area: row[mapping.area] || 'Unknown',
-                        cluster: row[mapping.cluster] || 'Unknown',
-                        status: row[mapping.status] || 'Unknown',
-                        fieldRider: row[mapping.fieldRider] || 'Unknown',
-                        chCode: row[mapping.chCode] || 'Unknown',
-                        date: row[mapping.date] || 'Unknown',
-                        subStatus: row[mapping.subStatus] || 'Unknown',
-                        _originalRow: row
-                    };
-                    consolidatedData.push(consolidatedRow);
-                });
-            });
-        }
-
-        function updateSummaryStats() {
-            if (!consolidatedData.length) {
-                summaryStats = null;
-                return;
-            }
-
-            const byArea = {};
-            const byBank = {};
-            const byUser = {};
-            const byStatus = {};
-            const byCluster = {};
-
-            // Enhanced breakdown with status details
-            const areaStatusBreakdown = {};
-            const bankStatusBreakdown = {};
-            const fieldRiderStatusBreakdown = {};
-            const clusterStatusBreakdown = {};
-
-            consolidatedData.forEach(row => {
-                // By Area
-                byArea[row.area] = (byArea[row.area] || 0) + 1;
-                if (!areaStatusBreakdown[row.area]) areaStatusBreakdown[row.area] = {};
-                areaStatusBreakdown[row.area][row.status] = (areaStatusBreakdown[row.area][row.status] || 0) + 1;
-                
-                // By Bank
-                byBank[row.bank] = (byBank[row.bank] || 0) + 1;
-                if (!bankStatusBreakdown[row.bank]) bankStatusBreakdown[row.bank] = {};
-                bankStatusBreakdown[row.bank][row.status] = (bankStatusBreakdown[row.bank][row.status] || 0) + 1;
-                
-                // By User/Field Rider
-                byUser[row.fieldRider] = (byUser[row.fieldRider] || 0) + 1;
-                if (!fieldRiderStatusBreakdown[row.fieldRider]) fieldRiderStatusBreakdown[row.fieldRider] = {};
-                fieldRiderStatusBreakdown[row.fieldRider][row.status] = (fieldRiderStatusBreakdown[row.fieldRider][row.status] || 0) + 1;
-                
-                // By Status
-                byStatus[row.status] = (byStatus[row.status] || 0) + 1;
-                
-                // By Cluster
-                byCluster[row.cluster] = (byCluster[row.cluster] || 0) + 1;
-                if (!clusterStatusBreakdown[row.cluster]) clusterStatusBreakdown[row.cluster] = {};
-                clusterStatusBreakdown[row.cluster][row.status] = (clusterStatusBreakdown[row.cluster][row.status] || 0) + 1;
-            });
-
-            summaryStats = {
-                total: consolidatedData.length,
-                byArea: Object.entries(byArea).sort((a, b) => b[1] - a[1]),
-                byBank: Object.entries(byBank).sort((a, b) => b[1] - a[1]),
-                byUser: Object.entries(byUser).sort((a, b) => b[1] - a[1]),
-                byStatus: Object.entries(byStatus).sort((a, b) => b[1] - a[1]),
-                byCluster: Object.entries(byCluster).sort((a, b) => b[1] - a[1]),
-                statusBreakdowns: {
-                    area: areaStatusBreakdown,
-                    bank: bankStatusBreakdown,
-                    fieldRider: fieldRiderStatusBreakdown,
-                    cluster: clusterStatusBreakdown
-                }
-            };
-
-            updateSummaryUI();
-        }
-
-        function updateSummaryUI() {
-            if (!summaryStats) return;
-
-            // Update total records
-            document.querySelector('#total-records span').textContent = `Total Records: ${summaryStats.total.toLocaleString()}`;
-
-            // Update summary cards
-            const summaryCards = document.getElementById('summary-cards');
-            summaryCards.innerHTML = '';
-
-            const cardConfigs = [
-                { title: 'By Area', data: summaryStats.byArea, color: '#3B82F6', breakdownType: 'area', icon: 'map-pin' },
-                { title: 'By Bank', data: summaryStats.byBank, color: '#10B981', breakdownType: 'bank', icon: 'building' },
-                { title: 'By Field Rider', data: summaryStats.byUser, color: '#F59E0B', breakdownType: 'fieldRider', icon: 'users' },
-                { title: 'By Status', data: summaryStats.byStatus, color: '#EF4444', breakdownType: null, icon: 'bar-chart' },
-                { title: 'By Cluster', data: summaryStats.byCluster, color: '#8B5CF6', breakdownType: 'cluster', icon: 'settings' }
-            ];
-
-            cardConfigs.forEach(config => {
-                const card = createSummaryCard(config);
-                summaryCards.appendChild(card);
-            });
-
-            // Update data table
-            updateDataTable();
-        }
-
-        function createSummaryCard({ title, data, color, breakdownType, icon }) {
-            const total = data.reduce((sum, [, value]) => sum + value, 0);
-            
-            const card = document.createElement('div');
-            card.className = 'summary-card';
-            card.style.borderLeftColor = color;
-            
-            const iconSvg = getIconSvg(icon);
-            
-            card.innerHTML = `
-                <div class="summary-card-header">
-                    <h3 class="summary-card-title">${title}</h3>
-                    <div class="summary-card-actions">
-                        ${title !== 'By Status' ? `
-                            <button class="icon-btn breakdown-toggle" data-card-title="${title}" data-breakdown-type="${breakdownType}">
-                                <span style="font-size: 0.75rem; padding: 0.125rem 0.5rem;">Show Status</span>
-                            </button>
-                        ` : ''}
-                        <button class="icon-btn export-png-card" data-title="${title}">
-                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                                <circle cx="8.5" cy="8.5" r="1.5"/>
-                                <polyline points="21,15 16,10 5,21"/>
-                            </svg>
-                        </button>
-                        <button class="icon-btn export-csv-card" data-title="${title}" data-data='${JSON.stringify(data)}'>
-                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                <polyline points="7,10 12,15 17,10"/>
-                                <line x1="12" y1="15" x2="12" y2="3"/>
-                            </svg>
-                        </button>
-                        ${iconSvg}
-                    </div>
-                </div>
-                
-                <div class="summary-total">
-                    <span class="summary-total-label">Total ${title}</span>
-                    <span class="summary-total-value" style="color: ${color};">
-                        ${total.toLocaleString()}
-                    </span>
-                </div>
-                
-                <div class="summary-list">
-                    ${data.slice(0, 10).map(([key, value]) => {
-                        const statusBreakdown = getStatusBreakdown(key, breakdownType, title);
-                        return `
-                            <div class="summary-item">
-                                <div class="summary-item-main">
-                                    <span class="summary-item-label">${key}</span>
-                                    <div class="summary-item-actions">
-                                        <span class="summary-item-count">${value.toLocaleString()}</span>
-                                        <span class="summary-item-percent">${((value / total) * 100).toFixed(1)}%</span>
-                                    </div>
-                                </div>
-                                ${statusBreakdown.length > 0 ? `
-                                    <div class="breakdown-items hidden">
-                                        ${statusBreakdown.map(([status, count]) => `
-                                            <div class="breakdown-item">
-                                                <span class="breakdown-item-label">└ ${status}</span>
-                                                <div style="display: flex; gap: 0.25rem; align-items: center;">
-                                                    <span class="breakdown-item-count">${count}</span>
-                                                    <span class="breakdown-item-percent">${((count / value) * 100).toFixed(0)}%</span>
-                                                </div>
-                                            </div>
-                                        `).join('')}
-                                    </div>
-                                ` : ''}
-                            </div>
-                        `;
-                    }).join('')}
-                    ${data.length > 10 ? `
-                        <div style="font-size: 0.75rem; color: #6b7280; padding-top: 0.5rem; border-top: 1px solid #f3f4f6;">
-                            ... and ${data.length - 10} more
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-            
-            // Add event listeners
-            const breakdownToggle = card.querySelector('.breakdown-toggle');
-            if (breakdownToggle) {
-                breakdownToggle.addEventListener('click', () => {
-                    const breakdownItems = card.querySelectorAll('.breakdown-items');
-                    const isShowing = breakdownToggle.classList.contains('active');
-                    
-                    breakdownItems.forEach(item => {
-                        if (isShowing) {
-                            item.classList.add('hidden');
-                        } else {
-                            item.classList.remove('hidden');
-                        }
-                    });
-                    
-                    breakdownToggle.classList.toggle('active');
-                    breakdownToggle.innerHTML = `<span style="font-size: 0.75rem; padding: 0.125rem 0.5rem;">${isShowing ? 'Show' : 'Hide'} Status</span>`;
-                });
-            }
-            
-            const exportPngBtn = card.querySelector('.export-png-card');
-            if (exportPngBtn) {
-                exportPngBtn.addEventListener('click', () => {
-                    exportCardToPNG(card, title);
-                });
-            }
-            
-            const exportCsvBtn = card.querySelector('.export-csv-card');
-            if (exportCsvBtn) {
-                exportCsvBtn.addEventListener('click', () => {
-                    exportSummaryToCSV(data, title);
-                });
-            }
-            
-            return card;
-        }
-
-        function getStatusBreakdown(itemName, breakdownType, title) {
-            if (title === "By Status" || !breakdownType || !summaryStats?.statusBreakdowns) {
-                return [];
-            }
-            
-            const breakdownData = summaryStats.statusBreakdowns[breakdownType];
-            if (!breakdownData || !breakdownData[itemName]) {
-                return [];
-            }
-            
-            return Object.entries(breakdownData[itemName]).sort((a, b) => b[1] - a[1]);
-        }
-
-        function getIconSvg(iconName) {
-            const icons = {
-                'map-pin': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
-                'building': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v8h20v-8a2 2 0 0 0-2-2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>',
-                'users': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m22 21-3-3m0 0a4 4 0 1 0-2-2 4 4 0 0 0 2 2Z"/></svg>',
-                'bar-chart': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>',
-                'settings': '<svg class="icon-lg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="m12 1 0 6m0 6 0 6m11-7-6 0m-6 0-6 0"/></svg>'
-            };
-            return icons[iconName] || '';
-        }
-
-        function updateDataTable() {
-            const tableBody = document.getElementById('table-body');
-            const tableFooter = document.getElementById('table-footer');
-            
-            tableBody.innerHTML = '';
-            
-            if (consolidatedData.length === 0) {
-                tableFooter.classList.add('hidden');
-                return;
-            }
-            
-            const displayData = consolidatedData.slice(0, 50);
-            
-            displayData.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td style="font-weight: 500;">${row._fileName.replace('.csv', '')}</td>
-                    <td>${row.bank}</td>
-                    <td>${row.area}</td>
-                    <td>${row.cluster}</td>
-                    <td><span class="status-badge">${row.status}</span></td>
-                    <td>${row.fieldRider}</td>
-                    <td>${row.chCode}</td>
-                    <td>${row.date}</td>
-                `;
-                tableBody.appendChild(tr);
-            });
-            
-            if (consolidatedData.length > 50) {
-                tableFooter.textContent = `Showing first 50 of ${consolidatedData.length} records`;
-                tableFooter.classList.remove('hidden');
-            } else {
-                tableFooter.classList.add('hidden');
-            }
-        }
-
-        function exportToCSV(data, filename) {
-            try {
-                const csv = Papa.unparse(data);
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                
+        // Create download link
+        canvas.toBlob((blob) => {
+            if (blob) {
                 const link = document.createElement('a');
                 const url = URL.createObjectURL(blob);
                 link.href = url;
@@ -1333,147 +1844,28 @@
                 }, 100);
                 
                 console.log(`Successfully exported: ${filename}`);
-            } catch (error) {
-                console.error('Error exporting CSV:', error);
-                alert('Error exporting CSV file. Please try again.');
             }
-        }
-
-        function exportSummaryToCSV(summaryData, title) {
-            try {
-                const csvData = summaryData.map(([key, value]) => ({
-                    [title]: key,
-                    Count: value
-                }));
-                
-                const total = summaryData.reduce((sum, [, value]) => sum + value, 0);
-                csvData.push({
-                    [title]: 'TOTAL',
-                    Count: total
-                });
-                
-                exportToCSV(csvData, `${title.replace(/\s+/g, '_')}_Summary.csv`);
-            } catch (error) {
-                console.error('Error exporting summary:', error);
-                alert('Error exporting summary. Please try again.');
+            
+            // Remove loading modal
+            if (document.body.contains(loadingModal)) {
+                document.body.removeChild(loadingModal);
             }
+        }, 'image/png', 0.95);
+        
+    } catch (error) {
+        console.error('Error exporting PNG:', error);
+        alert('Error exporting image. Please try the CSV export instead.');
+        
+        // Remove loading modal if it exists
+        const loadingModal = document.querySelector('.export-preparing');
+        if (loadingModal && document.body.contains(loadingModal)) {
+            document.body.removeChild(loadingModal);
         }
-
-        function exportConsolidatedData() {
-            try {
-                const exportData = consolidatedData.map(row => ({
-                    File: row._fileName,
-                    Bank: row.bank,
-                    Area: row.area,
-                    Cluster: row.cluster,
-                    Status: row.status,
-                    'Field Rider': row.fieldRider,
-                    'CH Code': row.chCode,
-                    Date: row.date,
-                    'Sub Status': row.subStatus
-                }));
-                
-                exportToCSV(exportData, 'Consolidated_Data_Summary.csv');
-            } catch (error) {
-                console.error('Error exporting consolidated data:', error);
-                alert('Error exporting data. Please try again.');
-            }
+        
+        // Remove export mode class
+        if (element) {
+            element.classList.remove('export-mode');
         }
-
-        function exportCardToPNG(cardElement, title) {
-            exportElementToPNG(cardElement, `${title.replace(/\s+/g, '_')}_Summary.png`);
-        }
-
-        function exportToPNG() {
-            const summaryContent = document.getElementById('summary-content');
-            exportElementToPNG(summaryContent, 'Complete_Summary_Report.png');
-        }
-
-        async function exportElementToPNG(element, filename) {
-            try {
-                if (!element) {
-                    alert('Content not available for export');
-                    return;
-                }
-
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                
-                const rect = element.getBoundingClientRect();
-                const scale = 2;
-                canvas.width = rect.width * scale;
-                canvas.height = rect.height * scale;
-                
-                ctx.scale(scale, scale);
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, rect.width, rect.height);
-                
-                ctx.fillStyle = '#1f2937';
-                ctx.font = 'bold 18px system-ui';
-                ctx.fillText(filename.replace('.png', ''), 20, 30);
-                
-                ctx.font = '12px system-ui';
-                ctx.fillStyle = '#6b7280';
-                ctx.fillText(`Generated: ${new Date().toLocaleString()}`, 20, 60);
-                
-                const textContent = element.innerText || element.textContent || '';
-                const lines = textContent.split('\n').filter(line => line.trim());
-                
-                ctx.fillStyle = '#1f2937';
-                ctx.font = '14px system-ui';
-                
-                let yPosition = 90;
-                lines.forEach(line => {
-                    if (line.trim() && yPosition < canvas.height / scale - 20) {
-                        const maxWidth = rect.width - 40;
-                        const words = line.split(' ');
-                        let currentLine = '';
-                        
-                        words.forEach(word => {
-                            const testLine = currentLine + word + ' ';
-                            const metrics = ctx.measureText(testLine);
-                            
-                            if (metrics.width > maxWidth && currentLine !== '') {
-                                ctx.fillText(currentLine, 20, yPosition);
-                                yPosition += 20;
-                                currentLine = word + ' ';
-                            } else {
-                                currentLine = testLine;
-                            }
-                        });
-                        
-                        if (currentLine.trim()) {
-                            ctx.fillText(currentLine, 20, yPosition);
-                            yPosition += 20;
-                        }
-                    }
-                });
-                
-                canvas.toBlob((blob) => {
-                    if (blob) {
-                        const link = document.createElement('a');
-                        const url = URL.createObjectURL(blob);
-                        link.href = url;
-                        link.download = filename;
-                        link.style.display = 'none';
-                        
-                        document.body.appendChild(link);
-                        link.click();
-                        
-                        setTimeout(() => {
-                            document.body.removeChild(link);
-                            URL.revokeObjectURL(url);
-                        }, 100);
-                        
-                        console.log(`Successfully exported: ${filename}`);
-                    }
-                }, 'image/png', 0.95);
-                
-            } catch (error) {
-                console.error('Error exporting PNG:', error);
-                alert('Error exporting image. Please try the CSV export instead.');
-            }
-        }
-    </script>
-</body>
-</html>
+    }
+}
+</script>
