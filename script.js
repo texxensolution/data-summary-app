@@ -1068,15 +1068,29 @@ function exportSummaryImage() {
 }
 
 function createFieldRiderTable() {
-    if (!summaryStats || !summaryStats.filteredData.length) return;
+    if (!summaryStats || !summaryStats.filteredData.length) {
+        console.log('No summary stats or filtered data available for field rider table');
+        return;
+    }
 
     const dataToUse = summaryStats.filteredData;
     const fieldRiderData = {};
 
+    console.log('Creating field rider table with data:', dataToUse.length, 'records');
+
     // Group data by field rider and area
-    dataToUse.forEach(row => {
-        const fieldRider = row.fieldRider;
-        const area = row.area;
+    dataToUse.forEach((row, index) => {
+        const fieldRider = row.fieldRider || 'Unknown';
+        const area = row.area || 'Unknown';
+        
+        // Debug: Log first few rows to check data structure
+        if (index < 5) {
+            console.log('Row', index, ':', {
+                fieldRider: row.fieldRider,
+                area: row.area,
+                visitType: row.visitType
+            });
+        }
         
         if (!fieldRiderData[fieldRider]) {
             fieldRiderData[fieldRider] = {};
@@ -1100,10 +1114,17 @@ function createFieldRiderTable() {
         fieldRiderData[fieldRider][area].total += 1;
     });
 
+    console.log('Field rider data grouped:', fieldRiderData);
+
     // Get unique areas for filter dropdown
-    const allAreas = [...new Set(dataToUse.map(row => row.area))].sort();
+    const allAreas = [...new Set(dataToUse.map(row => row.area || 'Unknown'))].sort();
 
     const tableContainer = document.getElementById('field-rider-table');
+    if (!tableContainer) {
+        console.error('Field rider table container not found');
+        return;
+    }
+
     const currentDate = new Date().toLocaleDateString('en-US', { 
         year: 'numeric', 
         month: 'long', 
@@ -1115,7 +1136,7 @@ function createFieldRiderTable() {
         <div class="field-rider-controls">
             <label for="area-filter">Filter by Area:</label>
             <select id="area-filter" class="area-filter-select">
-                <option value="">All Areas</option>
+                <option value="">All Areas (${allAreas.length} total)</option>
                 ${allAreas.map(area => `<option value="${area}">${area}</option>`).join('')}
             </select>
         </div>
@@ -1155,6 +1176,8 @@ function createFieldRiderTable() {
         });
     });
 
+    console.log('Table rows to display:', tableRows.length);
+
     // Sort by field rider, then by area
     tableRows.sort((a, b) => {
         if (a.fieldRider === b.fieldRider) {
@@ -1164,66 +1187,86 @@ function createFieldRiderTable() {
     });
 
     // Generate table rows
-    tableRows.forEach(row => {
+    if (tableRows.length === 0) {
         tableHTML += `
-            <tr class="field-rider-row" data-area="${row.area}">
-                <td class="field-rider-cell">${row.fieldRider}</td>
-                <td class="area-cell">${row.area}</td>
-                <td>${row.shared}</td>
-                <td>${row.ci}</td>
-                <td>${row.total}</td>
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 2rem; color: #64748b;">
+                    No field rider data available. Please check if field rider column is properly mapped.
+                </td>
             </tr>
         `;
-    });
+    } else {
+        tableRows.forEach(row => {
+            tableHTML += `
+                <tr class="field-rider-row" data-area="${row.area}">
+                    <td class="field-rider-cell">${row.fieldRider}</td>
+                    <td class="area-cell">${row.area}</td>
+                    <td>${row.shared}</td>
+                    <td>${row.ci}</td>
+                    <td>${row.total}</td>
+                </tr>
+            `;
+        });
 
-    // Calculate totals
-    const totalShared = tableRows.reduce((sum, row) => sum + row.shared, 0);
-    const totalCI = tableRows.reduce((sum, row) => sum + row.ci, 0);
-    const totalAll = tableRows.reduce((sum, row) => sum + row.total, 0);
+        // Calculate totals
+        const totalShared = tableRows.reduce((sum, row) => sum + row.shared, 0);
+        const totalCI = tableRows.reduce((sum, row) => sum + row.ci, 0);
+        const totalAll = tableRows.reduce((sum, row) => sum + row.total, 0);
+
+        tableHTML += `
+                <tr class="total-row">
+                    <td colspan="2"><strong>TOTAL</strong></td>
+                    <td><strong>${totalShared}</strong></td>
+                    <td><strong>${totalCI}</strong></td>
+                    <td><strong>${totalAll}</strong></td>
+                </tr>
+        `;
+    }
 
     tableHTML += `
-            <tr class="total-row">
-                <td colspan="2"><strong>TOTAL</strong></td>
-                <td><strong>${totalShared}</strong></td>
-                <td><strong>${totalCI}</strong></td>
-                <td><strong>${totalAll}</strong></td>
-            </tr>
         </tbody>
     </table>
     `;
 
     tableContainer.innerHTML = tableHTML;
 
-    // Add event listener for area filter
-    document.getElementById('area-filter').addEventListener('change', function() {
-        const selectedArea = this.value;
-        const rows = document.querySelectorAll('.field-rider-row');
-        
-        let visibleShared = 0;
-        let visibleCI = 0;
-        let visibleTotal = 0;
-        
-        rows.forEach(row => {
-            const rowArea = row.getAttribute('data-area');
-            if (selectedArea === '' || rowArea === selectedArea) {
-                row.style.display = '';
-                const cells = row.querySelectorAll('td');
-                visibleShared += parseInt(cells[2].textContent);
-                visibleCI += parseInt(cells[3].textContent);
-                visibleTotal += parseInt(cells[4].textContent);
-            } else {
-                row.style.display = 'none';
-            }
-        });
-        
-        // Update totals row
-        const totalRow = document.querySelector('#field-rider-data-table .total-row');
-        const totalCells = totalRow.querySelectorAll('td');
-        totalCells[1].innerHTML = '<strong>TOTAL</strong>';
-        totalCells[2].innerHTML = `<strong>${visibleShared}</strong>`;
-        totalCells[3].innerHTML = `<strong>${visibleCI}</strong>`;
-        totalCells[4].innerHTML = `<strong>${visibleTotal}</strong>`;
-    });
+    // Add event listener for area filter only if there are rows
+    if (tableRows.length > 0) {
+        const areaFilter = document.getElementById('area-filter');
+        if (areaFilter) {
+            areaFilter.addEventListener('change', function() {
+                const selectedArea = this.value;
+                const rows = document.querySelectorAll('.field-rider-row');
+                
+                let visibleShared = 0;
+                let visibleCI = 0;
+                let visibleTotal = 0;
+                
+                rows.forEach(row => {
+                    const rowArea = row.getAttribute('data-area');
+                    if (selectedArea === '' || rowArea === selectedArea) {
+                        row.style.display = '';
+                        const cells = row.querySelectorAll('td');
+                        visibleShared += parseInt(cells[2].textContent);
+                        visibleCI += parseInt(cells[3].textContent);
+                        visibleTotal += parseInt(cells[4].textContent);
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+                
+                // Update totals row
+                const totalRow = document.querySelector('#field-rider-data-table .total-row');
+                if (totalRow) {
+                    const totalCells = totalRow.querySelectorAll('td');
+                    totalCells[1].innerHTML = '<strong>TOTAL</strong>';
+                    totalCells[2].innerHTML = `<strong>${visibleShared}</strong>`;
+                    totalCells[3].innerHTML = `<strong>${visibleCI}</strong>`;
+                    totalCells[4].innerHTML = `<strong>${visibleTotal}</strong>`;
+                }
+            });
+        }
+    }
 }
 
 function exportFieldRiderSummary() {
