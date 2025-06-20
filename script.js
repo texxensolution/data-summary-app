@@ -520,6 +520,7 @@ function showSummary() {
 
     createWorklistTable();
     createResultTable();
+    createFieldRiderTable();
 
     const summaryCards = document.getElementById('summary-cards');
     summaryCards.innerHTML = '';
@@ -762,309 +763,6 @@ function createResultTable() {
     `;
 
     tableContainer.innerHTML = tableHTML;
-}
-
-function createSummaryCard({ title, data, color }) {
-    const total = data.reduce((sum, [, value]) => sum + value, 0);
-    
-    const card = document.createElement('div');
-    card.className = 'summary-card';
-    card.style.borderLeftColor = color;
-    
-    const listItems = data.slice(0, 8).map(([key, value]) => `
-        <div class="summary-item">
-            <span class="summary-label">${key}</span>
-            <div class="summary-value">
-                <span class="summary-count">${value.toLocaleString()}</span>
-                <span class="summary-percent">${((value / total) * 100).toFixed(1)}%</span>
-            </div>
-        </div>
-    `).join('');
-
-    card.innerHTML = `
-        <div class="summary-header">
-            <h3 class="summary-title">${title}</h3>
-            <button class="btn" onclick="exportCardData('${title}', ${JSON.stringify(data).replace(/"/g, '&quot;')})">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="7,10 12,15 17,10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-            </button>
-        </div>
-        
-        <div class="summary-total" style="color: ${color};">
-            ${total.toLocaleString()}
-        </div>
-        
-        <div class="summary-list">
-            ${listItems}
-            ${data.length > 8 ? `
-                <div style="text-align: center; padding: 0.75rem; color: #64748b; font-size: 0.875rem; font-weight: 500;">
-                    ... and ${data.length - 8} more items
-                </div>
-            ` : ''}
-        </div>
-    `;
-    
-    return card;
-}
-
-function exportCardData(title, data) {
-    const csvData = data.map(([key, value]) => ({
-        [title.replace(/[^\w\s]/gi, '')]: key,
-        Count: value,
-        Percentage: ((value / data.reduce((sum, [, val]) => sum + val, 0)) * 100).toFixed(2) + '%'
-    }));
-    
-    exportToCSV(csvData, `${title.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_')}_Summary.csv`);
-}
-
-function exportWorklistSummary() {
-    if (!summaryStats || !summaryStats.filteredData.length) {
-        alert('No data to export');
-        return;
-    }
-
-    const dataToUse = summaryStats.filteredData;
-    const clusterData = {};
-
-    dataToUse.forEach(row => {
-        const cluster = row.cluster;
-        if (!clusterData[cluster]) {
-            clusterData[cluster] = {
-                bpiSkip: 0,
-                bdoSkip: 0,
-                shared: 0,
-                total: 0
-            };
-        }
-        
-        if (row.bankType === 'BPI') {
-            clusterData[cluster].bpiSkip += 1;
-        } else if (row.bankType === 'BDO') {
-            clusterData[cluster].bdoSkip += 1;
-        } else {
-            clusterData[cluster].shared += 1;
-        }
-        
-        clusterData[cluster].total += 1;
-    });
-
-    const csvData = Object.entries(clusterData).map(([cluster, data]) => ({
-        'Area Cluster': cluster,
-        'BPI Skip': data.bpiSkip,
-        'BDO Skip': data.bdoSkip,
-        'Shared': data.shared,
-        'Total': data.total
-    }));
-
-    exportToCSV(csvData, 'Worklist_Summary.csv');
-}
-
-function exportResultSummary() {
-    if (!summaryStats || !summaryStats.filteredData.length) {
-        alert('No data to export');
-        return;
-    }
-
-    const dataToUse = summaryStats.filteredData;
-    const clusterData = {};
-
-    dataToUse.forEach(row => {
-        const cluster = row.cluster;
-        if (!clusterData[cluster]) {
-            clusterData[cluster] = {
-                ciVisits: 0,
-                sharedVisits: 0,
-                totalVisits: 0,
-                uniqueSkiptracers: new Set()
-            };
-        }
-        
-        if (row.visitType === 'CI') {
-            clusterData[cluster].ciVisits += 1;
-        } else {
-            clusterData[cluster].sharedVisits += 1;
-        }
-        
-        clusterData[cluster].totalVisits += 1;
-        clusterData[cluster].uniqueSkiptracers.add(row.fieldRider);
-    });
-
-    const csvData = Object.entries(clusterData).map(([cluster, data]) => {
-        const uniqueSkipTracers = data.uniqueSkiptracers.size;
-        const dailySalaryCost = uniqueSkipTracers * 1000;
-        const costPerVisit = data.totalVisits > 0 ? (dailySalaryCost / data.totalVisits) : 0;
-        const avgVisit = uniqueSkipTracers > 0 ? (data.totalVisits / uniqueSkipTracers) : 0;
-
-        return {
-            'Area Cluster': cluster,
-            'CI Visits': data.ciVisits,
-            'Shared Visits': data.sharedVisits,
-            'Total Visits': data.totalVisits,
-            'Unique Skiptracers': uniqueSkipTracers,
-            'Daily Salary Cost (1K/FS)': dailySalaryCost,
-            'Cost Per Visit': costPerVisit.toFixed(2),
-            'Average Visit per Skiptracer': avgVisit.toFixed(2)
-        };
-    });
-
-    exportToCSV(csvData, 'Result_Summary.csv');
-}
-
-function exportAllData() {
-    if (!consolidatedData.length) {
-        alert('No data to export');
-        return;
-    }
-
-    const excludeCancel = document.getElementById('exclude-cancel')?.checked || false;
-    const dataToExport = excludeCancel 
-        ? consolidatedData.filter(row => !row.status.toLowerCase().includes('cancel'))
-        : consolidatedData;
-
-    const exportData = dataToExport.map(row => ({
-        'File Name': row.fileName,
-        'Bank': row.bank,
-        'Area': row.area,
-        'Cluster': row.cluster,
-        'Status': row.status,
-        'Field Rider': row.fieldRider,
-        'CH Code': row.chCode,
-        'Date': row.date,
-        'Bank Type': row.bankType,
-        'Visit Type': row.visitType
-    }));
-    
-    const filename = excludeCancel ? 'Complete_Data_Export_Less_Cancel.csv' : 'Complete_Data_Export.csv';
-    exportToCSV(exportData, filename);
-}
-
-function exportToCSV(data, filename) {
-    try {
-        const csv = Papa.unparse(data);
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.href = url;
-        link.download = filename;
-        link.style.display = 'none';
-        
-        document.body.appendChild(link);
-        link.click();
-        
-        setTimeout(() => {
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }, 100);
-        
-    } catch (error) {
-        console.error('Error exporting CSV:', error);
-        alert('Error exporting CSV file. Please try again.');
-    }
-}
-
-function exportSummaryImage() {
-    const summaryArea = document.getElementById('summary-export-area');
-    if (!summaryArea) {
-        alert('No summary to export');
-        return;
-    }
-
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    canvas.width = 1400;
-    canvas.height = 900;
-    
-    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    gradient.addColorStop(0, '#0ea5e9');
-    gradient.addColorStop(0.5, '#3b82f6');
-    gradient.addColorStop(1, '#8b5cf6');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 40px Inter';
-    ctx.textAlign = 'center';
-    ctx.fillText('📊 Data Summary Analytics Report', canvas.width / 2, 60);
-    
-    ctx.font = '18px Inter';
-    ctx.fillStyle = '#f1f5f9';
-    ctx.fillText(`Generated: ${new Date().toLocaleString()}`, canvas.width / 2, 90);
-    
-    ctx.font = 'bold 28px Inter';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(`Total Records: ${summaryStats?.total.toLocaleString() || 0}`, canvas.width / 2, 140);
-    
-    if (summaryStats) {
-        let yPos = 190;
-        ctx.font = '20px Inter';
-        ctx.textAlign = 'left';
-        ctx.fillStyle = '#ffffff';
-        
-        const summaries = [
-            `🏦 Banks: ${summaryStats.byBank.length} different banks`,
-            `📍 Areas: ${summaryStats.byArea.length} different areas`,
-            `📊 Status Types: ${summaryStats.byStatus.length} different statuses`,
-            `👤 Field Riders: ${summaryStats.byFieldRider.length} different field riders`,
-            `🏢 Clusters: ${summaryStats.byCluster.length} different clusters`,
-            `🏦 Bank Types: ${summaryStats.byBankType.length} different bank types`,
-            `🎯 Visit Types: ${summaryStats.byVisitType.length} different visit types`
-        ];
-        
-        summaries.forEach(text => {
-            ctx.fillText(text, 80, yPos);
-            yPos += 35;
-        });
-        
-        yPos += 30;
-        ctx.font = 'bold 24px Inter';
-        ctx.fillText('🔥 Top Items by Category:', 80, yPos);
-        yPos += 40;
-        
-        ctx.font = '18px Inter';
-        const categories = [
-            { name: '🏦 Top Banks', data: summaryStats.byBank.slice(0, 3) },
-            { name: '📍 Top Areas', data: summaryStats.byArea.slice(0, 3) },
-            { name: '📊 Top Statuses', data: summaryStats.byStatus.slice(0, 3) },
-            { name: '🏦 Bank Types', data: summaryStats.byBankType.slice(0, 3) },
-            { name: '🎯 Visit Types', data: summaryStats.byVisitType.slice(0, 3) }
-        ];
-        
-        categories.forEach(category => {
-            ctx.font = 'bold 20px Inter';
-            ctx.fillText(`${category.name}:`, 80, yPos);
-            yPos += 30;
-            
-            ctx.font = '16px Inter';
-            category.data.forEach(([name, count]) => {
-                ctx.fillText(`  • ${name}: ${count.toLocaleString()}`, 100, yPos);
-                yPos += 25;
-            });
-            yPos += 15;
-        });
-    }
-    
-    canvas.toBlob((blob) => {
-        if (blob) {
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            link.href = url;
-            link.download = 'Data_Summary_Analytics_Report.png';
-            link.style.display = 'none';
-            
-            document.body.appendChild(link);
-            link.click();
-            
-            setTimeout(() => {
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-            }, 100);
-        }
-    }, 'image/png');
 }
 
 function createFieldRiderTable() {
@@ -1373,4 +1071,261 @@ function createSummaryCard({ title, data, color }) {
     `;
     
     return card;
+}
+
+function exportCardData(title, data) {
+    const csvData = data.map(([key, value]) => ({
+        [title.replace(/[^\w\s]/gi, '')]: key,
+        Count: value,
+        Percentage: ((value / data.reduce((sum, [, val]) => sum + val, 0)) * 100).toFixed(2) + '%'
+    }));
+    
+    exportToCSV(csvData, `${title.replace(/[^\w\s]/gi, '').replace(/\s+/g, '_')}_Summary.csv`);
+}
+
+function exportWorklistSummary() {
+    if (!summaryStats || !summaryStats.filteredData.length) {
+        alert('No data to export');
+        return;
+    }
+
+    const dataToUse = summaryStats.filteredData;
+    const clusterData = {};
+
+    dataToUse.forEach(row => {
+        const cluster = row.cluster;
+        if (!clusterData[cluster]) {
+            clusterData[cluster] = {
+                bpiSkip: 0,
+                bdoSkip: 0,
+                shared: 0,
+                total: 0
+            };
+        }
+        
+        if (row.bankType === 'BPI') {
+            clusterData[cluster].bpiSkip += 1;
+        } else if (row.bankType === 'BDO') {
+            clusterData[cluster].bdoSkip += 1;
+        } else {
+            clusterData[cluster].shared += 1;
+        }
+        
+        clusterData[cluster].total += 1;
+    });
+
+    const csvData = Object.entries(clusterData).map(([cluster, data]) => ({
+        'Area Cluster': cluster,
+        'BPI Skip': data.bpiSkip,
+        'BDO Skip': data.bdoSkip,
+        'Shared': data.shared,
+        'Total': data.total
+    }));
+
+    exportToCSV(csvData, 'Worklist_Summary.csv');
+}
+
+function exportResultSummary() {
+    if (!summaryStats || !summaryStats.filteredData.length) {
+        alert('No data to export');
+        return;
+    }
+
+    const dataToUse = summaryStats.filteredData;
+    const clusterData = {};
+
+    dataToUse.forEach(row => {
+        const cluster = row.cluster;
+        if (!clusterData[cluster]) {
+            clusterData[cluster] = {
+                ciVisits: 0,
+                sharedVisits: 0,
+                totalVisits: 0,
+                uniqueSkiptracers: new Set()
+            };
+        }
+        
+        if (row.visitType === 'CI') {
+            clusterData[cluster].ciVisits += 1;
+        } else {
+            clusterData[cluster].sharedVisits += 1;
+        }
+        
+        clusterData[cluster].totalVisits += 1;
+        clusterData[cluster].uniqueSkiptracers.add(row.fieldRider);
+    });
+
+    const csvData = Object.entries(clusterData).map(([cluster, data]) => {
+        const uniqueSkipTracers = data.uniqueSkiptracers.size;
+        const dailySalaryCost = uniqueSkipTracers * 1000;
+        const costPerVisit = data.totalVisits > 0 ? (dailySalaryCost / data.totalVisits) : 0;
+        const avgVisit = uniqueSkipTracers > 0 ? (data.totalVisits / uniqueSkipTracers) : 0;
+
+        return {
+            'Area Cluster': cluster,
+            'CI Visits': data.ciVisits,
+            'Shared Visits': data.sharedVisits,
+            'Total Visits': data.totalVisits,
+            'Unique Skiptracers': uniqueSkipTracers,
+            'Daily Salary Cost (1K/FS)': dailySalaryCost,
+            'Cost Per Visit': costPerVisit.toFixed(2),
+            'Average Visit per Skiptracer': avgVisit.toFixed(2)
+        };
+    });
+
+    exportToCSV(csvData, 'Result_Summary.csv');
+}
+
+function exportAllData() {
+    if (!consolidatedData.length) {
+        alert('No data to export');
+        return;
+    }
+
+    const excludeCancel = document.getElementById('exclude-cancel')?.checked || false;
+    const dataToExport = excludeCancel 
+        ? consolidatedData.filter(row => !row.status.toLowerCase().includes('cancel'))
+        : consolidatedData;
+
+    const exportData = dataToExport.map(row => ({
+        'File Name': row.fileName,
+        'Bank': row.bank,
+        'Area': row.area,
+        'Cluster': row.cluster,
+        'Status': row.status,
+        'Field Rider': row.fieldRider,
+        'CH Code': row.chCode,
+        'Date': row.date,
+        'Bank Type': row.bankType,
+        'Visit Type': row.visitType
+    }));
+    
+    const filename = excludeCancel ? 'Complete_Data_Export_Less_Cancel.csv' : 'Complete_Data_Export.csv';
+    exportToCSV(exportData, filename);
+}
+
+function exportToCSV(data, filename) {
+    try {
+        const csv = Papa.unparse(data);
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = filename;
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        
+        setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+    } catch (error) {
+        console.error('Error exporting CSV:', error);
+        alert('Error exporting CSV file. Please try again.');
+    }
+}
+
+function exportSummaryImage() {
+    const summaryArea = document.getElementById('summary-export-area');
+    if (!summaryArea) {
+        alert('No summary to export');
+        return;
+    }
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    canvas.width = 1400;
+    canvas.height = 900;
+    
+    const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    gradient.addColorStop(0, '#0ea5e9');
+    gradient.addColorStop(0.5, '#3b82f6');
+    gradient.addColorStop(1, '#8b5cf6');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 40px Inter';
+    ctx.textAlign = 'center';
+    ctx.fillText('📊 Data Summary Analytics Report', canvas.width / 2, 60);
+    
+    ctx.font = '18px Inter';
+    ctx.fillStyle = '#f1f5f9';
+    ctx.fillText(`Generated: ${new Date().toLocaleString()}`, canvas.width / 2, 90);
+    
+    ctx.font = 'bold 28px Inter';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(`Total Records: ${summaryStats?.total.toLocaleString() || 0}`, canvas.width / 2, 140);
+    
+    if (summaryStats) {
+        let yPos = 190;
+        ctx.font = '20px Inter';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#ffffff';
+        
+        const summaries = [
+            `🏦 Banks: ${summaryStats.byBank.length} different banks`,
+            `📍 Areas: ${summaryStats.byArea.length} different areas`,
+            `📊 Status Types: ${summaryStats.byStatus.length} different statuses`,
+            `👤 Field Riders: ${summaryStats.byFieldRider.length} different field riders`,
+            `🏢 Clusters: ${summaryStats.byCluster.length} different clusters`,
+            `🏦 Bank Types: ${summaryStats.byBankType.length} different bank types`,
+            `🎯 Visit Types: ${summaryStats.byVisitType.length} different visit types`
+        ];
+        
+        summaries.forEach(text => {
+            ctx.fillText(text, 80, yPos);
+            yPos += 35;
+        });
+        
+        yPos += 30;
+        ctx.font = 'bold 24px Inter';
+        ctx.fillText('🔥 Top Items by Category:', 80, yPos);
+        yPos += 40;
+        
+        ctx.font = '18px Inter';
+        const categories = [
+            { name: '🏦 Top Banks', data: summaryStats.byBank.slice(0, 3) },
+            { name: '📍 Top Areas', data: summaryStats.byArea.slice(0, 3) },
+            { name: '📊 Top Statuses', data: summaryStats.byStatus.slice(0, 3) },
+            { name: '🏦 Bank Types', data: summaryStats.byBankType.slice(0, 3) },
+            { name: '🎯 Visit Types', data: summaryStats.byVisitType.slice(0, 3) }
+        ];
+        
+        categories.forEach(category => {
+            ctx.font = 'bold 20px Inter';
+            ctx.fillText(`${category.name}:`, 80, yPos);
+            yPos += 30;
+            
+            ctx.font = '16px Inter';
+            category.data.forEach(([name, count]) => {
+                ctx.fillText(`  • ${name}: ${count.toLocaleString()}`, 100, yPos);
+                yPos += 25;
+            });
+            yPos += 15;
+        });
+    }
+    
+    canvas.toBlob((blob) => {
+        if (blob) {
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.href = url;
+            link.download = 'Data_Summary_Analytics_Report.png';
+            link.style.display = 'none';
+            
+            document.body.appendChild(link);
+            link.click();
+            
+            setTimeout(() => {
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            }, 100);
+        }
+    }, 'image/png');
 }
