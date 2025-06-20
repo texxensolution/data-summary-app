@@ -1,3 +1,5 @@
+
+
 let parsedData = [];
 let consolidatedData = [];
 let summaryStats = null;
@@ -5,6 +7,8 @@ let manualColumnMappings = {};
 let clusterLookup = {};
 let fileBankTypes = {}; // Store BPI/BDO/SHARED for each file
 let fileVisitTypes = {}; // Store CI/SHARED for each file
+let comparisonData = []; // Store worklist/worked comparison data
+let comparisonType = 'worklist'; // 'worklist' or 'worked'
 
 const standardColumns = {
     bank: ['BANK NAME', 'BANK', 'bank_txt', 'BANK NAME REAL'],
@@ -24,10 +28,12 @@ function initializeEventListeners() {
     const fileInput = document.getElementById('file-input');
     const dropzone = document.getElementById('dropzone');
     const clusterFileInput = document.getElementById('cluster-file-input');
+    const comparisonFileInput = document.getElementById('comparison-file-input');
 
     dropzone.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', handleFileUpload);
     clusterFileInput.addEventListener('change', handleClusterFileUpload);
+    comparisonFileInput.addEventListener('change', handleComparisonFileUpload);
 
     dropzone.addEventListener('dragover', (e) => {
         e.preventDefault();
@@ -56,6 +62,11 @@ function initializeEventListeners() {
             generateSummary();
             showSummary();
         }
+    });
+
+    // File type selection listener
+    document.getElementById('file-type-select').addEventListener('change', function() {
+        comparisonType = this.value;
     });
 }
 
@@ -101,6 +112,84 @@ async function handleClusterFileUpload(event) {
 function updateClusterStatus(loaded, message) {
     const indicator = document.getElementById('cluster-indicator');
     const status = document.getElementById('cluster-status');
+    
+    if (loaded) {
+        indicator.classList.add('loaded');
+        status.textContent = message;
+        status.style.color = '#059669';
+    } else {
+        indicator.classList.remove('loaded');
+        status.textContent = message;
+        status.style.color = '#dc2626';
+    }
+}
+
+async function handleComparisonFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+        comparisonType = document.getElementById('file-type-select').value;
+        
+        let data;
+        if (file.name.toLowerCase().endsWith('.csv')) {
+            const text = await file.text();
+            const parsed = Papa.parse(text, {
+                header: true,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                delimitersToGuess: [',', '\t', '|', ';']
+            });
+            data = parsed.data;
+        } else {
+            // Excel file
+            const buffer = await file.arrayBuffer();
+            const workbook = XLSX.read(buffer, {
+                cellStyles: true,
+                cellFormulas: true,
+                cellDates: true,
+                cellNF: true,
+                sheetStubs: true
+            });
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            data = XLSX.utils.sheet_to_json(firstSheet);
+        }
+
+        // Clean and process comparison data
+        comparisonData = data.filter(row => {
+            return Object.values(row).some(value => 
+                value !== null && 
+                value !== undefined && 
+                value !== '' && 
+                String(value).trim() !== ''
+            );
+        }).map(row => {
+            const cleanRow = {};
+            Object.keys(row).forEach(key => {
+                const cleanKey = key.trim();
+                cleanRow[cleanKey] = row[key];
+            });
+            return cleanRow;
+        });
+
+        updateWorklistStatus(true, `Loaded ${comparisonData.length} ${comparisonType} records from ${file.name}`);
+        console.log(`${comparisonType} comparison data loaded:`, comparisonData);
+
+        // If we have both main data and comparison data, create performance comparison
+        if (summaryStats && summaryStats.filteredData.length > 0) {
+            createPerformanceComparison();
+        }
+
+    } catch (error) {
+        console.error('Error loading comparison file:', error);
+        updateWorklistStatus(false, 'Error loading comparison file');
+        alert('Error loading comparison file. Please ensure it\'s a valid CSV or Excel file.');
+    }
+}
+
+function updateWorklistStatus(loaded, message) {
+    const indicator = document.getElementById('worklist-indicator');
+    const status = document.getElementById('worklist-status');
     
     if (loaded) {
         indicator.classList.add('loaded');
@@ -521,6 +610,11 @@ function showSummary() {
     createWorklistTable();
     createResultTable();
     createFieldRiderTable();
+
+    // Create performance comparison if comparison data is available
+    if (comparisonData.length > 0) {
+        createPerformanceComparison();
+    }
 
     const summaryCards = document.getElementById('summary-cards');
     summaryCards.innerHTML = '';
@@ -969,10 +1063,12 @@ function createFieldRiderTable() {
                 const totalRow = document.querySelector('#field-rider-data-table .total-row');
                 if (totalRow) {
                     const totalCells = totalRow.querySelectorAll('td');
-                    totalCells[1].innerHTML = '<strong>TOTAL</strong>';
-                    totalCells[2].innerHTML = `<strong>${visibleShared}</strong>`;
-                    totalCells[3].innerHTML = `<strong>${visibleCI}</strong>`;
-                    totalCells[4].innerHTML = `<strong>${visibleTotal}</strong>`;
+                    totalCells[0].innerHTML = '<strong>TOTAL</strong>';
+                    totalCells[1].innerHTML = '';
+                    totalCells[2].innerHTML = '';
+                    totalCells[3].innerHTML = `<strong>${visibleShared}</strong>`;
+                    totalCells[4].innerHTML = `<strong>${visibleCI}</strong>`;
+                    totalCells[5].innerHTML = `<strong>${visibleTotal}</strong>`;
                 }
             });
         }
@@ -1348,4 +1444,256 @@ function exportSummaryImage() {
             }, 100);
         }
     }, 'image/png');
+}
+
+function createPerformanceComparison() {
+    if (!summaryStats || !summaryStats.filteredData.length || !comparisonData.length) {
+        console.log('Cannot create performance comparison - missing data');
+        return;
+    }
+
+    console.log('Creating performance comparison');
+    
+    // Get current field rider data
+    const currentData = summaryStats.filteredData;
+    const fieldRiderCurrent = {};
+
+    // Group current data by field rider
+    currentData.forEach(row => {
+        const fieldRider = row.fieldRider || 'Unknown';
+        if (!fieldRiderCurrent[fieldRider]) {
+            fieldRiderCurrent[fieldRider] = {
+                shared: 0,
+                ci: 0,
+                total: 0
+            };
+        }
+        
+        if (row.visitType === 'CI') {
+            fieldRiderCurrent[fieldRider].ci += 1;
+        } else {
+            fieldRiderCurrent[fieldRider].shared += 1;
+        }
+        fieldRiderCurrent[fieldRider].total += 1;
+    });
+
+    // Try to find field rider column in comparison data
+    const comparisonHeaders = Object.keys(comparisonData[0] || {});
+    const fieldRiderColumns = ['FIELD RIDER', 'FS NAME', 'FIELDMAN', 'ASSIGNED FS', 'Creator'];
+    let fieldRiderCol = comparisonHeaders.find(header => 
+        fieldRiderColumns.some(variant => 
+            header.toUpperCase().includes(variant.toUpperCase())
+        )
+    );
+
+    if (!fieldRiderCol) {
+        // If no field rider column found, use first column
+        fieldRiderCol = comparisonHeaders[0];
+        console.warn('No field rider column found in comparison data, using first column:', fieldRiderCol);
+    }
+
+    // Group comparison data by field rider
+    const fieldRiderComparison = {};
+    comparisonData.forEach(row => {
+        const fieldRider = row[fieldRiderCol] || 'Unknown';
+        if (!fieldRiderComparison[fieldRider]) {
+            fieldRiderComparison[fieldRider] = 0;
+        }
+        fieldRiderComparison[fieldRider] += 1;
+    });
+
+    console.log('Current data:', fieldRiderCurrent);
+    console.log('Comparison data:', fieldRiderComparison);
+
+    // Create comparison table
+    const tableContainer = document.getElementById('performance-table');
+    const currentDate = new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+
+    // Get all unique field riders
+    const allFieldRiders = new Set([
+        ...Object.keys(fieldRiderCurrent),
+        ...Object.keys(fieldRiderComparison)
+    ]);
+
+    let tableHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th colspan="6" class="table-header-main">
+                        ${currentDate.toUpperCase()} - PERFORMANCE COMPARISON
+                    </th>
+                </tr>
+                <tr>
+                    <th rowspan="2" class="table-subheader">FIELD RIDER</th>
+                    <th colspan="2" class="table-subheader">${comparisonType.toUpperCase()}</th>
+                    <th colspan="2" class="table-subheader">ACTUAL</th>
+                    <th rowspan="2" class="table-subheader">ACCOMPLISHMENT %</th>
+                </tr>
+                <tr>
+                    <th class="table-subheader">TARGET</th>
+                    <th class="table-subheader">TYPE</th>
+                    <th class="table-subheader">WORKED</th>
+                    <th class="table-subheader">TOTAL</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    const performanceRows = [];
+    
+    Array.from(allFieldRiders).forEach(fieldRider => {
+        if (fieldRider === 'Unknown') return; // Skip unknown field riders
+        
+        const targetCount = fieldRiderComparison[fieldRider] || 0;
+        const actualData = fieldRiderCurrent[fieldRider] || { shared: 0, ci: 0, total: 0 };
+        const actualTotal = actualData.total;
+        
+        let accomplishmentPercent = 0;
+        if (comparisonType === 'worklist' && targetCount > 0) {
+            // If comparison is worklist (target), calculate actual/target
+            accomplishmentPercent = (actualTotal / targetCount) * 100;
+        } else if (comparisonType === 'worked' && actualTotal > 0) {
+            // If comparison is worked accounts, calculate target/actual  
+            accomplishmentPercent = (targetCount / actualTotal) * 100;
+        }
+
+        performanceRows.push({
+            fieldRider,
+            target: targetCount,
+            actual: actualTotal,
+            accomplishment: accomplishmentPercent
+        });
+    });
+
+    // Sort by accomplishment percentage (descending)
+    performanceRows.sort((a, b) => b.accomplishment - a.accomplishment);
+
+    performanceRows.forEach(row => {
+        let performanceClass = 'performance-poor';
+        if (row.accomplishment >= 90) {
+            performanceClass = 'performance-excellent';
+        } else if (row.accomplishment >= 70) {
+            performanceClass = 'performance-good';
+        }
+
+        const actualData = fieldRiderCurrent[row.fieldRider] || { shared: 0, ci: 0, total: 0 };
+        
+        tableHTML += `
+            <tr>
+                <td class="field-rider-cell">${row.fieldRider}</td>
+                <td>${row.target}</td>
+                <td>${comparisonType.toUpperCase()}</td>
+                <td>${actualData.total}</td>
+                <td>${actualData.shared + actualData.ci}</td>
+                <td class="performance-cell ${performanceClass}">${row.accomplishment.toFixed(1)}%</td>
+            </tr>
+        `;
+    });
+
+    // Calculate totals
+    const totalTarget = performanceRows.reduce((sum, row) => sum + row.target, 0);
+    const totalActual = performanceRows.reduce((sum, row) => sum + row.actual, 0);
+    const totalAccomplishment = totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
+
+    let totalPerformanceClass = 'performance-poor';
+    if (totalAccomplishment >= 90) {
+        totalPerformanceClass = 'performance-excellent';
+    } else if (totalAccomplishment >= 70) {
+        totalPerformanceClass = 'performance-good';
+    }
+
+    tableHTML += `
+            <tr class="total-row">
+                <td><strong>TOTAL</strong></td>
+                <td><strong>${totalTarget}</strong></td>
+                <td><strong>ALL</strong></td>
+                <td><strong>${totalActual}</strong></td>
+                <td><strong>${totalActual}</strong></td>
+                <td class="performance-cell ${totalPerformanceClass}"><strong>${totalAccomplishment.toFixed(1)}%</strong></td>
+            </tr>
+        </tbody>
+    </table>
+    `;
+
+    tableContainer.innerHTML = tableHTML;
+    
+    // Show the performance comparison section
+    document.getElementById('performance-comparison').style.display = 'block';
+}
+
+function exportPerformanceComparison() {
+    if (!summaryStats || !summaryStats.filteredData.length || !comparisonData.length) {
+        alert('No performance comparison data to export');
+        return;
+    }
+
+    // Get current field rider data
+    const currentData = summaryStats.filteredData;
+    const fieldRiderCurrent = {};
+
+    currentData.forEach(row => {
+        const fieldRider = row.fieldRider || 'Unknown';
+        if (!fieldRiderCurrent[fieldRider]) {
+            fieldRiderCurrent[fieldRider] = { shared: 0, ci: 0, total: 0 };
+        }
+        
+        if (row.visitType === 'CI') {
+            fieldRiderCurrent[fieldRider].ci += 1;
+        } else {
+            fieldRiderCurrent[fieldRider].shared += 1;
+        }
+        fieldRiderCurrent[fieldRider].total += 1;
+    });
+
+    // Get comparison data
+    const comparisonHeaders = Object.keys(comparisonData[0] || {});
+    const fieldRiderColumns = ['FIELD RIDER', 'FS NAME', 'FIELDMAN', 'ASSIGNED FS', 'Creator'];
+    let fieldRiderCol = comparisonHeaders.find(header => 
+        fieldRiderColumns.some(variant => 
+            header.toUpperCase().includes(variant.toUpperCase())
+        )
+    ) || comparisonHeaders[0];
+
+    const fieldRiderComparison = {};
+    comparisonData.forEach(row => {
+        const fieldRider = row[fieldRiderCol] || 'Unknown';
+        fieldRiderComparison[fieldRider] = (fieldRiderComparison[fieldRider] || 0) + 1;
+    });
+
+    // Create export data
+    const allFieldRiders = new Set([...Object.keys(fieldRiderCurrent), ...Object.keys(fieldRiderComparison)]);
+    const csvData = [];
+
+    Array.from(allFieldRiders).forEach(fieldRider => {
+        if (fieldRider === 'Unknown') return;
+        
+        const targetCount = fieldRiderComparison[fieldRider] || 0;
+        const actualData = fieldRiderCurrent[fieldRider] || { shared: 0, ci: 0, total: 0 };
+        const actualTotal = actualData.total;
+        
+        let accomplishmentPercent = 0;
+        if (comparisonType === 'worklist' && targetCount > 0) {
+            accomplishmentPercent = (actualTotal / targetCount) * 100;
+        } else if (comparisonType === 'worked' && actualTotal > 0) {
+            accomplishmentPercent = (targetCount / actualTotal) * 100;
+        }
+
+        csvData.push({
+            'Field Rider': fieldRider,
+            [`${comparisonType.charAt(0).toUpperCase() + comparisonType.slice(1)} Target`]: targetCount,
+            'Actual Worked': actualTotal,
+            'Shared': actualData.shared,
+            'CI': actualData.ci,
+            'Accomplishment %': accomplishmentPercent.toFixed(1) + '%'
+        });
+    });
+
+    // Sort by accomplishment percentage
+    csvData.sort((a, b) => parseFloat(b['Accomplishment %']) - parseFloat(a['Accomplishment %']));
+
+    exportToCSV(csvData, `Performance_Comparison_${comparisonType}.csv`);
 }

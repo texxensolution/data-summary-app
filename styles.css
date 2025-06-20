@@ -489,6 +489,73 @@ tr:hover td {
     text-align: right;
 }
 
+.worklist-upload {
+    background-color: #f0f9ff;
+    border: 1px solid #0ea5e9;
+}
+
+.worklist-upload h4 {
+    color: #0c4a6e;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.worklist-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.worklist-controls {
+    display: grid;
+    grid-template-columns: 1fr 200px;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.worklist-input-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.worklist-input-group label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+#comparison-file-input, #file-type-select {
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    background: white;
+}
+
+.performance-cell {
+    font-weight: 600;
+    text-align: center !important;
+}
+
+.performance-excellent {
+    background: #dcfce7 !important;
+    color: #166534 !important;
+}
+
+.performance-good {
+    background: #fef3c7 !important;
+    color: #92400e !important;
+}
+
+.performance-poor {
+    background: #fee2e2 !important;
+    color: #991b1b !important;
+}
+
 .field-rider-controls {
     margin-bottom: 1rem;
     padding: 1rem;
