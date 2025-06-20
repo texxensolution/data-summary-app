@@ -1066,3 +1066,268 @@ function exportSummaryImage() {
         }
     }, 'image/png');
 }
+
+function createFieldRiderTable() {
+    if (!summaryStats || !summaryStats.filteredData.length) return;
+
+    const dataToUse = summaryStats.filteredData;
+    const fieldRiderData = {};
+
+    // Group data by field rider and area
+    dataToUse.forEach(row => {
+        const fieldRider = row.fieldRider;
+        const area = row.area;
+        
+        if (!fieldRiderData[fieldRider]) {
+            fieldRiderData[fieldRider] = {};
+        }
+        
+        if (!fieldRiderData[fieldRider][area]) {
+            fieldRiderData[fieldRider][area] = {
+                shared: 0,
+                ci: 0,
+                total: 0
+            };
+        }
+        
+        // Count based on visit type
+        if (row.visitType === 'CI') {
+            fieldRiderData[fieldRider][area].ci += 1;
+        } else {
+            fieldRiderData[fieldRider][area].shared += 1;
+        }
+        
+        fieldRiderData[fieldRider][area].total += 1;
+    });
+
+    // Get unique areas for filter dropdown
+    const allAreas = [...new Set(dataToUse.map(row => row.area))].sort();
+
+    const tableContainer = document.getElementById('field-rider-table');
+    const currentDate = new Date().toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    });
+    
+    // Create area filter dropdown
+    const areaFilterHTML = `
+        <div class="field-rider-controls">
+            <label for="area-filter">Filter by Area:</label>
+            <select id="area-filter" class="area-filter-select">
+                <option value="">All Areas</option>
+                ${allAreas.map(area => `<option value="${area}">${area}</option>`).join('')}
+            </select>
+        </div>
+    `;
+    
+    let tableHTML = `
+        ${areaFilterHTML}
+        <table id="field-rider-data-table">
+            <thead>
+                <tr>
+                    <th colspan="5" class="table-header-main">
+                        ${currentDate.toUpperCase()} - FIELD RIDER WORKLIST & ACCOUNTS
+                    </th>
+                </tr>
+                <tr>
+                    <th class="table-subheader">FIELD RIDER</th>
+                    <th class="table-subheader">AREA</th>
+                    <th class="table-subheader">SHARED</th>
+                    <th class="table-subheader">CI</th>
+                    <th class="table-subheader">TOTAL</th>
+                </tr>
+            </thead>
+            <tbody id="field-rider-tbody">
+    `;
+
+    // Flatten the data for table rows
+    const tableRows = [];
+    Object.entries(fieldRiderData).forEach(([fieldRider, areas]) => {
+        Object.entries(areas).forEach(([area, counts]) => {
+            tableRows.push({
+                fieldRider,
+                area,
+                shared: counts.shared,
+                ci: counts.ci,
+                total: counts.total
+            });
+        });
+    });
+
+    // Sort by field rider, then by area
+    tableRows.sort((a, b) => {
+        if (a.fieldRider === b.fieldRider) {
+            return a.area.localeCompare(b.area);
+        }
+        return a.fieldRider.localeCompare(b.fieldRider);
+    });
+
+    // Generate table rows
+    tableRows.forEach(row => {
+        tableHTML += `
+            <tr class="field-rider-row" data-area="${row.area}">
+                <td class="field-rider-cell">${row.fieldRider}</td>
+                <td class="area-cell">${row.area}</td>
+                <td>${row.shared}</td>
+                <td>${row.ci}</td>
+                <td>${row.total}</td>
+            </tr>
+        `;
+    });
+
+    // Calculate totals
+    const totalShared = tableRows.reduce((sum, row) => sum + row.shared, 0);
+    const totalCI = tableRows.reduce((sum, row) => sum + row.ci, 0);
+    const totalAll = tableRows.reduce((sum, row) => sum + row.total, 0);
+
+    tableHTML += `
+            <tr class="total-row">
+                <td colspan="2"><strong>TOTAL</strong></td>
+                <td><strong>${totalShared}</strong></td>
+                <td><strong>${totalCI}</strong></td>
+                <td><strong>${totalAll}</strong></td>
+            </tr>
+        </tbody>
+    </table>
+    `;
+
+    tableContainer.innerHTML = tableHTML;
+
+    // Add event listener for area filter
+    document.getElementById('area-filter').addEventListener('change', function() {
+        const selectedArea = this.value;
+        const rows = document.querySelectorAll('.field-rider-row');
+        
+        let visibleShared = 0;
+        let visibleCI = 0;
+        let visibleTotal = 0;
+        
+        rows.forEach(row => {
+            const rowArea = row.getAttribute('data-area');
+            if (selectedArea === '' || rowArea === selectedArea) {
+                row.style.display = '';
+                const cells = row.querySelectorAll('td');
+                visibleShared += parseInt(cells[2].textContent);
+                visibleCI += parseInt(cells[3].textContent);
+                visibleTotal += parseInt(cells[4].textContent);
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        // Update totals row
+        const totalRow = document.querySelector('#field-rider-data-table .total-row');
+        const totalCells = totalRow.querySelectorAll('td');
+        totalCells[1].innerHTML = '<strong>TOTAL</strong>';
+        totalCells[2].innerHTML = `<strong>${visibleShared}</strong>`;
+        totalCells[3].innerHTML = `<strong>${visibleCI}</strong>`;
+        totalCells[4].innerHTML = `<strong>${visibleTotal}</strong>`;
+    });
+}
+
+function exportFieldRiderSummary() {
+    if (!summaryStats || !summaryStats.filteredData.length) {
+        alert('No data to export');
+        return;
+    }
+
+    const dataToUse = summaryStats.filteredData;
+    const fieldRiderData = {};
+
+    // Group data by field rider and area
+    dataToUse.forEach(row => {
+        const fieldRider = row.fieldRider;
+        const area = row.area;
+        
+        if (!fieldRiderData[fieldRider]) {
+            fieldRiderData[fieldRider] = {};
+        }
+        
+        if (!fieldRiderData[fieldRider][area]) {
+            fieldRiderData[fieldRider][area] = {
+                shared: 0,
+                ci: 0,
+                total: 0
+            };
+        }
+        
+        if (row.visitType === 'CI') {
+            fieldRiderData[fieldRider][area].ci += 1;
+        } else {
+            fieldRiderData[fieldRider][area].shared += 1;
+        }
+        
+        fieldRiderData[fieldRider][area].total += 1;
+    });
+
+    // Flatten the data for CSV export
+    const csvData = [];
+    Object.entries(fieldRiderData).forEach(([fieldRider, areas]) => {
+        Object.entries(areas).forEach(([area, counts]) => {
+            csvData.push({
+                'Field Rider': fieldRider,
+                'Area': area,
+                'Shared': counts.shared,
+                'CI': counts.ci,
+                'Total': counts.total
+            });
+        });
+    });
+
+    // Sort by field rider, then by area
+    csvData.sort((a, b) => {
+        if (a['Field Rider'] === b['Field Rider']) {
+            return a['Area'].localeCompare(b['Area']);
+        }
+        return a['Field Rider'].localeCompare(b['Field Rider']);
+    });
+
+    exportToCSV(csvData, 'Field_Rider_Summary.csv');
+}
+
+function createSummaryCard({ title, data, color }) {
+    const total = data.reduce((sum, [, value]) => sum + value, 0);
+    
+    const card = document.createElement('div');
+    card.className = 'summary-card';
+    card.style.borderLeftColor = color;
+    
+    const listItems = data.slice(0, 8).map(([key, value]) => `
+        <div class="summary-item">
+            <span class="summary-label">${key}</span>
+            <div class="summary-value">
+                <span class="summary-count">${value.toLocaleString()}</span>
+                <span class="summary-percent">${((value / total) * 100).toFixed(1)}%</span>
+            </div>
+        </div>
+    `).join('');
+
+    card.innerHTML = `
+        <div class="summary-header">
+            <h3 class="summary-title">${title}</h3>
+            <button class="btn" onclick="exportCardData('${title}', ${JSON.stringify(data).replace(/"/g, '&quot;')})">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7,10 12,15 17,10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="summary-total" style="color: ${color};">
+            ${total.toLocaleString()}
+        </div>
+        
+        <div class="summary-list">
+            ${listItems}
+            ${data.length > 8 ? `
+                <div style="text-align: center; padding: 0.75rem; color: #64748b; font-size: 0.875rem; font-weight: 500;">
+                    ... and ${data.length - 8} more items
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    return card;
+}
