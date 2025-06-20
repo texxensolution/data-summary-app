@@ -776,15 +776,17 @@ function createFieldRiderTable() {
 
     console.log('Creating field rider table with data:', dataToUse.length, 'records');
 
-    // Group data by field rider and area
+    // Group data by field rider, cluster, and area
     dataToUse.forEach((row, index) => {
         const fieldRider = row.fieldRider || 'Unknown';
+        const cluster = row.cluster || 'Unknown';
         const area = row.area || 'Unknown';
         
         // Debug: Log first few rows to check data structure
         if (index < 5) {
             console.log('Row', index, ':', {
                 fieldRider: row.fieldRider,
+                cluster: row.cluster,
                 area: row.area,
                 visitType: row.visitType
             });
@@ -794,8 +796,12 @@ function createFieldRiderTable() {
             fieldRiderData[fieldRider] = {};
         }
         
-        if (!fieldRiderData[fieldRider][area]) {
-            fieldRiderData[fieldRider][area] = {
+        // Use cluster-area combination as key
+        const clusterAreaKey = `${cluster}|${area}`;
+        if (!fieldRiderData[fieldRider][clusterAreaKey]) {
+            fieldRiderData[fieldRider][clusterAreaKey] = {
+                cluster: cluster,
+                area: area,
                 shared: 0,
                 ci: 0,
                 total: 0
@@ -804,18 +810,18 @@ function createFieldRiderTable() {
         
         // Count based on visit type
         if (row.visitType === 'CI') {
-            fieldRiderData[fieldRider][area].ci += 1;
+            fieldRiderData[fieldRider][clusterAreaKey].ci += 1;
         } else {
-            fieldRiderData[fieldRider][area].shared += 1;
+            fieldRiderData[fieldRider][clusterAreaKey].shared += 1;
         }
         
-        fieldRiderData[fieldRider][area].total += 1;
+        fieldRiderData[fieldRider][clusterAreaKey].total += 1;
     });
 
     console.log('Field rider data grouped:', fieldRiderData);
 
-    // Get unique areas for filter dropdown
-    const allAreas = [...new Set(dataToUse.map(row => row.area || 'Unknown'))].sort();
+    // Get unique clusters for filter dropdown
+    const allClusters = [...new Set(dataToUse.map(row => row.cluster || 'Unknown'))].sort();
 
     const tableContainer = document.getElementById('field-rider-table');
     if (!tableContainer) {
@@ -829,28 +835,29 @@ function createFieldRiderTable() {
         day: 'numeric' 
     });
     
-    // Create area filter dropdown
-    const areaFilterHTML = `
+    // Create cluster filter dropdown
+    const clusterFilterHTML = `
         <div class="field-rider-controls">
-            <label for="area-filter">Filter by Area:</label>
-            <select id="area-filter" class="area-filter-select">
-                <option value="">All Areas (${allAreas.length} total)</option>
-                ${allAreas.map(area => `<option value="${area}">${area}</option>`).join('')}
+            <label for="cluster-filter">Filter by Cluster:</label>
+            <select id="cluster-filter" class="area-filter-select">
+                <option value="">All Clusters (${allClusters.length} total)</option>
+                ${allClusters.map(cluster => `<option value="${cluster}">${cluster}</option>`).join('')}
             </select>
         </div>
     `;
     
     let tableHTML = `
-        ${areaFilterHTML}
+        ${clusterFilterHTML}
         <table id="field-rider-data-table">
             <thead>
                 <tr>
-                    <th colspan="5" class="table-header-main">
+                    <th colspan="6" class="table-header-main">
                         ${currentDate.toUpperCase()} - FIELD RIDER WORKLIST & ACCOUNTS
                     </th>
                 </tr>
                 <tr>
                     <th class="table-subheader">FIELD RIDER</th>
+                    <th class="table-subheader">CLUSTER</th>
                     <th class="table-subheader">AREA</th>
                     <th class="table-subheader">SHARED</th>
                     <th class="table-subheader">CI</th>
@@ -862,11 +869,12 @@ function createFieldRiderTable() {
 
     // Flatten the data for table rows
     const tableRows = [];
-    Object.entries(fieldRiderData).forEach(([fieldRider, areas]) => {
-        Object.entries(areas).forEach(([area, counts]) => {
+    Object.entries(fieldRiderData).forEach(([fieldRider, clusterAreas]) => {
+        Object.entries(clusterAreas).forEach(([clusterAreaKey, counts]) => {
             tableRows.push({
                 fieldRider,
-                area,
+                cluster: counts.cluster,
+                area: counts.area,
                 shared: counts.shared,
                 ci: counts.ci,
                 total: counts.total
@@ -876,10 +884,13 @@ function createFieldRiderTable() {
 
     console.log('Table rows to display:', tableRows.length);
 
-    // Sort by field rider, then by area
+    // Sort by field rider, then by cluster, then by area
     tableRows.sort((a, b) => {
         if (a.fieldRider === b.fieldRider) {
-            return a.area.localeCompare(b.area);
+            if (a.cluster === b.cluster) {
+                return a.area.localeCompare(b.area);
+            }
+            return a.cluster.localeCompare(b.cluster);
         }
         return a.fieldRider.localeCompare(b.fieldRider);
     });
@@ -888,7 +899,7 @@ function createFieldRiderTable() {
     if (tableRows.length === 0) {
         tableHTML += `
             <tr>
-                <td colspan="5" style="text-align: center; padding: 2rem; color: #64748b;">
+                <td colspan="6" style="text-align: center; padding: 2rem; color: #64748b;">
                     No field rider data available. Please check if field rider column is properly mapped.
                 </td>
             </tr>
@@ -896,8 +907,9 @@ function createFieldRiderTable() {
     } else {
         tableRows.forEach(row => {
             tableHTML += `
-                <tr class="field-rider-row" data-area="${row.area}">
+                <tr class="field-rider-row" data-cluster="${row.cluster}">
                     <td class="field-rider-cell">${row.fieldRider}</td>
+                    <td class="cluster-cell">${row.cluster}</td>
                     <td class="area-cell">${row.area}</td>
                     <td>${row.shared}</td>
                     <td>${row.ci}</td>
@@ -913,7 +925,7 @@ function createFieldRiderTable() {
 
         tableHTML += `
                 <tr class="total-row">
-                    <td colspan="2"><strong>TOTAL</strong></td>
+                    <td colspan="3"><strong>TOTAL</strong></td>
                     <td><strong>${totalShared}</strong></td>
                     <td><strong>${totalCI}</strong></td>
                     <td><strong>${totalAll}</strong></td>
@@ -928,12 +940,12 @@ function createFieldRiderTable() {
 
     tableContainer.innerHTML = tableHTML;
 
-    // Add event listener for area filter only if there are rows
+    // Add event listener for cluster filter only if there are rows
     if (tableRows.length > 0) {
-        const areaFilter = document.getElementById('area-filter');
-        if (areaFilter) {
-            areaFilter.addEventListener('change', function() {
-                const selectedArea = this.value;
+        const clusterFilter = document.getElementById('cluster-filter');
+        if (clusterFilter) {
+            clusterFilter.addEventListener('change', function() {
+                const selectedCluster = this.value;
                 const rows = document.querySelectorAll('.field-rider-row');
                 
                 let visibleShared = 0;
@@ -941,13 +953,13 @@ function createFieldRiderTable() {
                 let visibleTotal = 0;
                 
                 rows.forEach(row => {
-                    const rowArea = row.getAttribute('data-area');
-                    if (selectedArea === '' || rowArea === selectedArea) {
+                    const rowCluster = row.getAttribute('data-cluster');
+                    if (selectedCluster === '' || rowCluster === selectedCluster) {
                         row.style.display = '';
                         const cells = row.querySelectorAll('td');
-                        visibleShared += parseInt(cells[2].textContent);
-                        visibleCI += parseInt(cells[3].textContent);
-                        visibleTotal += parseInt(cells[4].textContent);
+                        visibleShared += parseInt(cells[3].textContent);
+                        visibleCI += parseInt(cells[4].textContent);
+                        visibleTotal += parseInt(cells[5].textContent);
                     } else {
                         row.style.display = 'none';
                     }
@@ -976,17 +988,21 @@ function exportFieldRiderSummary() {
     const dataToUse = summaryStats.filteredData;
     const fieldRiderData = {};
 
-    // Group data by field rider and area
+    // Group data by field rider, cluster, and area
     dataToUse.forEach(row => {
-        const fieldRider = row.fieldRider;
-        const area = row.area;
+        const fieldRider = row.fieldRider || 'Unknown';
+        const cluster = row.cluster || 'Unknown';
+        const area = row.area || 'Unknown';
         
         if (!fieldRiderData[fieldRider]) {
             fieldRiderData[fieldRider] = {};
         }
         
-        if (!fieldRiderData[fieldRider][area]) {
-            fieldRiderData[fieldRider][area] = {
+        const clusterAreaKey = `${cluster}|${area}`;
+        if (!fieldRiderData[fieldRider][clusterAreaKey]) {
+            fieldRiderData[fieldRider][clusterAreaKey] = {
+                cluster: cluster,
+                area: area,
                 shared: 0,
                 ci: 0,
                 total: 0
@@ -994,21 +1010,22 @@ function exportFieldRiderSummary() {
         }
         
         if (row.visitType === 'CI') {
-            fieldRiderData[fieldRider][area].ci += 1;
+            fieldRiderData[fieldRider][clusterAreaKey].ci += 1;
         } else {
-            fieldRiderData[fieldRider][area].shared += 1;
+            fieldRiderData[fieldRider][clusterAreaKey].shared += 1;
         }
         
-        fieldRiderData[fieldRider][area].total += 1;
+        fieldRiderData[fieldRider][clusterAreaKey].total += 1;
     });
 
     // Flatten the data for CSV export
     const csvData = [];
-    Object.entries(fieldRiderData).forEach(([fieldRider, areas]) => {
-        Object.entries(areas).forEach(([area, counts]) => {
+    Object.entries(fieldRiderData).forEach(([fieldRider, clusterAreas]) => {
+        Object.entries(clusterAreas).forEach(([clusterAreaKey, counts]) => {
             csvData.push({
                 'Field Rider': fieldRider,
-                'Area': area,
+                'Cluster': counts.cluster,
+                'Area': counts.area,
                 'Shared': counts.shared,
                 'CI': counts.ci,
                 'Total': counts.total
@@ -1016,10 +1033,13 @@ function exportFieldRiderSummary() {
         });
     });
 
-    // Sort by field rider, then by area
+    // Sort by field rider, then by cluster, then by area
     csvData.sort((a, b) => {
         if (a['Field Rider'] === b['Field Rider']) {
-            return a['Area'].localeCompare(b['Area']);
+            if (a['Cluster'] === b['Cluster']) {
+                return a['Area'].localeCompare(b['Area']);
+            }
+            return a['Cluster'].localeCompare(b['Cluster']);
         }
         return a['Field Rider'].localeCompare(b['Field Rider']);
     });

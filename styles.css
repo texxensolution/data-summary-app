@@ -526,6 +526,14 @@ tr:hover td {
     color: #92400e;
 }
 
+.cluster-cell {
+    background: #e0e7ff !important;
+    font-weight: 600;
+    text-align: left !important;
+    padding-left: 1rem !important;
+    color: #3730a3;
+}
+
 .hidden {
     display: none !important;
 }
